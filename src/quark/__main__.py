@@ -1,39 +1,16 @@
+from __future__ import annotations
 from dataclasses import dataclass
-import argparse
+from itertools import chain
 from typing import Any, Union, Tuple, Optional
 from time import perf_counter
 import logging
 
 import yaml
-from anytree import AnyNode, NodeMixin, RenderTree
+from anytree import NodeMixin, RenderTree
 
+from quark.parsing import get_args
 from quark.plugin_manager import factory, loader
 from quark.protocols import Core
-
-def create_benchmark_parser(parser: argparse.ArgumentParser):
-    parser.add_argument("-c", "--config", help="Provide valid config file instead of interactive mode")
-    parser.add_argument('-cc', '--createconfig', help='If you want o create a config without executing it',
-                        required=False, action=argparse.BooleanOptionalAction)
-    parser.add_argument('-s', '--summarize', nargs='+', help='If you want to summarize multiple experiments',
-                        required=False)
-    parser.add_argument('-m', '--modules', help="Provide a file listing the modules to be loaded")
-    parser.add_argument('-rd', '--resume-dir', nargs='?', help='Provide results directory of the job to be resumed')
-    parser.add_argument('-ff', '--failfast', help='Flag whether a single failed benchmark run causes QUARK to fail',
-                        required=False, action=argparse.BooleanOptionalAction)
-
-    parser.set_defaults(goal='benchmark')
-
-
-def _set_logger(depth: int = 0) -> None:
-    """
-    Sets up the logger to also write to a file in the store directory.
-    """
-    logging.getLogger().handlers = []
-    logging.basicConfig(
-        level=logging.INFO,
-        format=f"%(asctime)s [%(levelname)s] {' '*4*depth}%(message)s",
-        handlers=[logging.StreamHandler(), logging.FileHandler("logging.log")]
-    )
 
 
 # In the config file, a pipeline module can be specified in two ways:
@@ -45,32 +22,16 @@ PipelineLayer = Union[PipelineModule, list[PipelineModule]]
 ModuleInfo = Tuple[str, dict[str, Any]]
 
 
-def _extract_module_info(module: PipelineModule) -> ModuleInfo:
-    match module:
-        case str():  # Single module
-            return((module, {}))
-        case dict():  # Single module with parameters
-            name = next(iter(module))
-            params = module[name]
-            return ((name, params))
-
-def _init_pipeline_tree(pipeline: list[PipelineLayer], parent: AnyNode) -> None:
-    match pipeline:
-        case []:
-            return
-        case [layer, *_]:
-            if not isinstance(layer, list):
-                layer = [layer]
-            for module in layer:
-                moduleInfo = _extract_module_info(module)
-                node = AnyNode(parent, moduleInfo=moduleInfo)
-                _init_pipeline_tree(pipeline[1:], parent=node)
-
 @dataclass
 class ModuleNode(NodeMixin):
     moduleInfo: ModuleInfo
     module: Optional[Core] = None
     preprocess_time: Optional[float] = None
+
+    def __init__(self, moduleInfo: ModuleInfo, parent: Optional[ModuleNode] = None):
+        super(ModuleNode, self).__init__()
+        self.moduleInfo = moduleInfo
+        self.parent = parent
 
 @dataclass(frozen=True)
 class RunInfo:
@@ -82,45 +43,6 @@ class RunInfo:
 class BenchmarkRun:
     result: Any
     steps: list[RunInfo]
-
-def _run_pipeline_tree(root: AnyNode) -> list[BenchmarkRun]:
-    benchmark_runs = []
-    def _imp(node: ModuleNode, depth:int, upstream_data: Any = None) -> None:
-        _set_logger(depth)
-        node.module = factory.create(node.moduleInfo[0], node.moduleInfo[1])
-        logging.info(f"Running preprocess for module {node.moduleInfo[0]}")
-        t1 = perf_counter()
-        data = node.module.preprocess(upstream_data)
-        node.preprocess_time = perf_counter() - t1
-        logging.info(f"Preprocess for module {node.moduleInfo[0]} took {node.preprocess_time} seconds\n")
-        match node.children:
-            case []: # Leaf node; End of pipeline
-                logging.info("Arrived at leaf node, starting postprocessing chain")
-                next_node = node
-                benchmark_runs.append([])
-                while(next_node.parent != None):
-                    _set_logger(depth)
-                    assert next_node.module is not None
-                    logging.info(f"Running postprocess for module {next_node.moduleInfo[0]}")
-                    t1 = perf_counter()
-                    data = next_node.module.postprocess(data)
-                    postprocess_time = perf_counter() - t1
-                    assert next_node.preprocess_time is not None
-                    benchmark_runs[-1].append(RunInfo(next_node.moduleInfo, next_node.preprocess_time, postprocess_time))
-                    logging.info(f"Postprocess for module {next_node.moduleInfo[0]} took {postprocess_time} seconds")
-                    next_node = next_node.parent
-                    depth -= 1
-                benchmark_runs[-1].reverse()
-                benchmark_runs[-1] = BenchmarkRun(result=data, steps=benchmark_runs[-1])
-                logging.info("Finished postprocessing chain\n")
-
-            case children:
-                for child in children:
-                    _imp(child, depth+1, data)
-
-    for child in root.children:
-        _imp(child, 0)
-    return benchmark_runs
 
 
 def start() -> None:
@@ -143,44 +65,32 @@ def start() -> None:
     logging.info("        Licensed under the Apache License, Version 2.0        ")
     logging.info(" ============================================================ ")
 
-    parser = argparse.ArgumentParser()
-    create_benchmark_parser(parser)
 
-    args = parser.parse_args()
+    args = get_args()
 
     with open(args.config) as file:
         data = yaml.load(file, Loader=yaml.FullLoader)
 
     loader.load_plugins(data["plugins"])
 
-    pipelines = {}
-    label_found = False
-    for label in ["pipeline", "pipelines"]:
-        if label in data:
-            pipelines = data[label]
-            label_found = True
-            break
-
-    if not label_found:
+    pipelines = []
+    if "pipelines" in data:
+        pipelines = data["pipelines"]
+    elif "pipeline" in data:
+        pipelines = [data["pipeline"]]
+    else:
         raise ValueError("No pipeline found in configuration file")
 
-    if isinstance(pipelines, list):
-        pipelines = {"pipeline": pipelines}
+    # Initialize all pipelines into trees and collect them
+    pipeline_trees = chain.from_iterable(_init_pipeline_tree(pipeline) for pipeline in pipelines)
+    # Run all pipelines and collect the resulting lists of BenchmarkRun objects
+    benchmark_runs = chain.from_iterable(_run_pipeline_tree(pipeline_tree) for pipeline_tree in pipeline_trees)
 
-    pipeline_tree_root = AnyNode()
-
-    for pipeline_group, pipeline in pipelines.items():
-        _init_pipeline_tree(pipeline, parent=pipeline_tree_root)
-
-    logging.info(RenderTree(pipeline_tree_root))
-
-    benchmark_runs = _run_pipeline_tree(pipeline_tree_root)
-
-    # logging.info(benchmark_runs)
-
+    benchmark_runs = list(benchmark_runs)
+    logging.info(" ======================== RESULTS ====================--===== ")
     for run in benchmark_runs:
-        logging.info(f"Result: {run.result}")
         logging.info([step.moduleInfo for step in run.steps])
+        logging.info(f"Result: {run.result}")
         logging.info(f"Total time: {sum(step.preprocess_time + step.postprocess_time for step in run.steps)}")
 
     logging.info(" ============================================================ ")
@@ -188,6 +98,95 @@ def start() -> None:
     logging.info(" ============================================================ ")
     exit(0)
 
+
+def _set_logger(depth: int = 0) -> None:
+    """
+    Sets up the logger to also write to a file in the store directory.
+    """
+    logging.getLogger().handlers = []
+    logging.basicConfig(
+        level=logging.INFO,
+        format=f"%(asctime)s [%(levelname)s] {' '*4*depth}%(message)s",
+        handlers=[logging.StreamHandler(), logging.FileHandler("logging.log")]
+    )
+
+def _extract_module_info(module: PipelineModule) -> ModuleInfo:
+    match module:
+        case str():  # Single module
+            return((module, {}))
+        case dict():  # Single module with parameters
+            name = next(iter(module))
+            params = module[name]
+            return ((name, params))
+
+def _init_pipeline_tree(pipeline: list[PipelineLayer]) -> list[ModuleNode]:
+    pipeline = [layer if isinstance(layer, list) else [layer] for layer in pipeline]
+    pipeline_trees = [ModuleNode(_extract_module_info(layer)) for layer in pipeline[0]]
+    def imp(pipeline: list[list[PipelineModule]], parent: ModuleNode) -> None:
+        match pipeline:
+            case []:
+                return
+            case [layer, *_]:
+                for module in layer:
+                    moduleInfo = _extract_module_info(module)
+                    node = ModuleNode(moduleInfo, parent)
+                    imp(pipeline[1:], parent=node)
+    for node in pipeline_trees:
+        imp(pipeline[1:], parent=node) # type: ignore
+    return pipeline_trees
+
+
+def _run_pipeline_tree(pipeline_tree: ModuleNode) -> list[BenchmarkRun]:
+    """
+    Runs pipelines by traversing the given pipeline tree
+
+    The pipeline tree represents one or more pipelines, where each node is a module.
+    A node can provide its output to any of its child nodes, each choice representing a distinct pipeline.
+    The tree is traversed in a depth-first manner, storing the result from each preprocess step to re-use as input for each child node.
+    When a leaf node is reached, the tree is traversed back up to the root node, running every postprocessing step along the way.
+
+    :param pipeline_tree: Root nodes of a pipeline tree, representing one or more pipelines
+    :return: A list of BenchmarkRun objects, one for each leaf node
+    """
+
+    benchmark_runs = [] # List of BenchmarkRun objects
+    def imp(node: ModuleNode, depth:int, upstream_data: Any = None) -> None:
+        _set_logger(depth)
+        node.module = factory.create(node.moduleInfo[0], node.moduleInfo[1])
+        logging.info(f"Running preprocess for module {node.moduleInfo}")
+        t1 = perf_counter()
+        data = node.module.preprocess(upstream_data)
+        node.preprocess_time = perf_counter() - t1
+        logging.info(f"Preprocess for module {node.moduleInfo} took {node.preprocess_time} seconds")
+        match node.children:
+            case []: # Leaf node; End of pipeline
+                logging.info("Arrived at leaf node, starting postprocessing chain")
+                next_node = node
+                benchmark_runs.append([])
+                while(next_node != None):
+                    _set_logger(depth)
+                    assert next_node.module is not None
+                    logging.info(f"Running postprocess for module {next_node.moduleInfo}")
+                    t1 = perf_counter()
+                    data = next_node.module.postprocess(data)
+                    postprocess_time = perf_counter() - t1
+                    assert next_node.preprocess_time is not None
+                    benchmark_runs[-1].append(RunInfo(next_node.moduleInfo, next_node.preprocess_time, postprocess_time))
+                    logging.info(f"Postprocess for module {next_node.moduleInfo} took {postprocess_time} seconds")
+                    next_node = next_node.parent
+                    depth -= 1
+                benchmark_runs[-1].reverse()
+                benchmark_runs[-1] = BenchmarkRun(result=data, steps=benchmark_runs[-1])
+                logging.info("Finished postprocessing chain")
+
+            case children:
+                for child in children:
+                    imp(child, depth+1, data)
+
+    logging.info("")
+    logging.info(f"Running pipeline tree:\n{RenderTree(pipeline_tree)}")
+    imp(pipeline_tree, 0)
+    return benchmark_runs
 
 
 if __name__ == '__main__':

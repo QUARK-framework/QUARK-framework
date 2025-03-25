@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from __future__ import annotations  # Needed if you want to type hint a method with the type of the enclosing class
+from __future__ import annotations
 from abc import abstractmethod
 from typing import Protocol, Any, runtime_checkable
 
