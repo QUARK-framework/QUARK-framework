@@ -1,3 +1,13 @@
+# === Custom files ===
+benchmark_runs
+uv.lock
+.idea
+*.pkl
+*.png
+# === Custom files ===
+
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

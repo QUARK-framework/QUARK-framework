@@ -1,6 +1,6 @@
 from typing import Any, Callable
 
-from quark.protocols import Core
+from quark.core import Core
 
 plugin_creation_funcs: dict[str, Callable[..., Core]] = {}
 

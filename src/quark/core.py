@@ -1,0 +1,64 @@
+from __future__ import annotations
+from dataclasses import dataclass
+from abc import ABC, abstractmethod
+from typing import Any, Optional
+
+@dataclass(frozen=True)
+class AsyncWait:
+    pass
+
+@dataclass(frozen=True)
+class Backtrack:
+    data: Any
+
+Interruption = AsyncWait | Backtrack
+
+class Core(ABC):
+    """
+    Core Module interface, implemented by all other Modules that are part of a benchmark pipeline.
+    """
+
+    @abstractmethod
+    def preprocess(self, data: Any) -> Interruption | Any:
+        """
+        Essential method for the benchmarking process. This is always executed before traversing down
+        to the next module, passing the data returned by this function.
+
+        :param data: Data for the module, comes from the parent module if that exists
+        :return: The processed data or an Interruption enum
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def postprocess(self, data: Any) -> Interruption | Any:
+        """
+        Essential Method for the benchmarking process. Is always executed after the submodule is finished. The data by
+        this method is passed up to the parent module.
+
+        :param data: Input data comes from the submodule if that exists
+        :return: The processed data or an Interruption enum
+        """
+        raise NotImplementedError()
+
+    def get_metrics(self) -> dict:
+        """
+        Returns all relevant, human-readable metrics of the module to be written to a json file for later analysis
+
+        Is called right after the postprocess method.
+        The module's config parameters are written to a file regardless of what is returned here.
+        Best practice is to only include human-readable data that gives insights into the module's performance or results.
+
+        :return: Dictionary containing all relevant metrics
+        """
+        return {}
+
+    def get_unique_name(self) -> Optional[str]:
+        """
+        Returns a string representation of the module to be used in the file names for benchmark results
+
+        The string should be human-readable, not too long, and be unique in regards to the parameters given to the module.
+        Two different instances of the same module should return different strings if they were given different parameters.
+
+        :return: An identifying string of the module instance. If None, a name is chosen automatically.
+        """
+        return None
