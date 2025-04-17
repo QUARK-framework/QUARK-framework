@@ -13,8 +13,7 @@ class PluginInterface(Protocol):
 
     @staticmethod
     def register() -> None:
-        ...
-
+        pass
 
 def import_module(plugin_file: str) -> PluginInterface:
     return importlib.import_module(plugin_file) # type: ignore

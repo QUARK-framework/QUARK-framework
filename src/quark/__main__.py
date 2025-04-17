@@ -48,6 +48,7 @@ def start() -> None:
     pipeline_trees:list[ModuleNode] = config.pipeline_trees
     pipeline_run_results:list[PipelineRunResult] = []
 
+    # TODO document the fact that the pipeline trees are overwritten and that the run id could be read beforehand
     pickle_file_path = f"{config.run_id}.pkl"
     if Path(pickle_file_path).is_file(): # Override trees and intermediate results with pickled values
         logging.info(f"Pickle file matching run id found: {pickle_file_path}")
@@ -59,14 +60,14 @@ def start() -> None:
     rest_trees: list[ModuleNode] = []
     for pipeline_tree in pipeline_trees:
         match run_pipeline_tree(pipeline_tree):
-            case FinishedTreeRun(results=results):
+            case FinishedTreeRun(results):
                 pipeline_run_results.extend(results)
             case InterruptedTreeRun(intermediate_results, rest_tree):
                 pipeline_run_results.extend(intermediate_results)
                 rest_trees.append(rest_tree)
 
     if rest_trees:
-        logging.info("Async interrupt: Some pipeline trees were interrupted")
+        logging.info("Async interrupt: Some modules interrupted execution. Quark will save the current state and exit.")
         pickle.dump(
             BenchmarkingPickle(
                 pipeline_trees=rest_trees,

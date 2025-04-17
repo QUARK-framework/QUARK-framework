@@ -32,6 +32,7 @@ class PipelineRunResult:
     """
     The result of running one benchmarking pipeline
     """
+    # TODO write about what this is and how to capture additional metrics in the json (additional_metrics)
     result: Any
     total_time: float
     steps: list[ModuleRunMetrics]
@@ -66,6 +67,7 @@ class ModuleNode(NodeMixin):
     module_info: ModuleInfo
 
     module: Optional[Core] = None
+    # TODO rename to preprocess is finished
     finished: bool = False
     preprocessed_data: Optional[Any] = None
     preprocess_time: Optional[float] = None
@@ -85,6 +87,7 @@ class PipelineRunResultEncoder(json.JSONEncoder):
         d["steps"] = [step.__dict__ for step in o.steps]
         for step in d["steps"]:
             step["module_info"] = step["module_info"].__dict__
+            # TODO can I remove this line?
             step["module_info"].pop("preprocessed_data", None)
         return d
 
@@ -111,6 +114,7 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
             logging.info(f"Module {node.module_info} already done, skipping")
             data = node.preprocessed_data
         else:
+            # TODO is this if statement necessary?
             if node.module is None:
                 logging.info(f"Creating module instance for {node.module_info}")
                 node.module = factory.create(node.module_info.name, node.module_info.params)
@@ -131,7 +135,8 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
 
 
         match node.children:
-            case []: # Leaf node; End of pipeline
+            case []: # Leaf node; Tail end of pipeline reached
+                # Document somewhere why the postprocess chain is done in this way instead of returning a postprocess result from imp and going from there
                 logging.info("Arrived at leaf node, starting postprocessing chain")
                 next_node = node
                 steps:list[ModuleRunMetrics] = []
@@ -152,8 +157,8 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
                             match next_node.module.get_unique_name():
                                 case None:
                                     unique_name = f"{next_node.module_info.name}{str.join("_", (str(v) for v in next_node.module_info.params.values()))}"
-                                case s:
-                                    unique_name = s
+                                case name:
+                                    unique_name = name
                             assert next_node.preprocess_time is not None # Otherwise Pylint complains
                             steps.append(ModuleRunMetrics(
                                 module_info=next_node.module_info,
@@ -175,7 +180,7 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
 
             case children:
                 encountered_async_wait: bool = False
-                for child in children: # TODO dont immediately return, run as long as possible
+                for child in children:
                     match imp(child, depth+1, data):
                         case None:
                             child.parent = None

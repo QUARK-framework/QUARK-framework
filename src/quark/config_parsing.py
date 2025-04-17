@@ -7,7 +7,12 @@ from quark.benchmarking import ModuleInfo, ModuleNode
 
 @dataclass(frozen=True)
 class Config:
+    """
+    A wrapper for the relevant config data, parsed from a config yml file
+    """
     plugins: list[str]
+    # Parsing directly to trees in form of ModuleNodes introduces some unfortunate coupling to the benchmarking module.
+    # However, doing so prevents returning pipeline_trees in form of some ugly intermediate type.
     pipeline_trees: list[ModuleNode]
     run_id: str
 
@@ -25,6 +30,14 @@ PipelineLayer = ModuleFormat | list[ModuleFormat]
 # ============================================================
 
 def _init_module_info(module: ModuleFormat) -> ModuleInfo:
+    """
+    Creates a ModuleInfo object from data adhering to ModuleFormat
+
+    This function belongs here instead of inside the ModuleInfo class definition because ModuleFormat is only used for parsing the config, not outside.
+
+    :param module: Data adhering to ModuleFormat
+    :return: An instance of ModuleInfo containing the given data
+    """
     match module:
         case str():  # Single module
             return ModuleInfo(name=module, params={})
@@ -35,6 +48,17 @@ def _init_module_info(module: ModuleFormat) -> ModuleInfo:
 
 
 def _init_pipeline_trees(pipeline: list[PipelineLayer]) -> list[ModuleNode]:
+    """
+    Creates pipeline trees from lists of data adhering to PipelineLayer
+
+    Each layer of a pipeline defined in the config file can contain one or more modules.
+    The function starts by creating a root node for each module in the first layer.
+    For each module in the next layer, a child node is created for each of the previous nodes.
+    This continues recursively until the last layer is reached.
+
+    :param pipeline: TODO
+    :return: TODO
+    """
     def imp(pipeline: list[list[ModuleFormat]], parent: ModuleNode) -> None:
         match pipeline:
             case []:
@@ -42,6 +66,7 @@ def _init_pipeline_trees(pipeline: list[PipelineLayer]) -> list[ModuleNode]:
             case [layer, *_]:
                 for module in layer:
                     module_info = _init_module_info(module)
+                    # TODO write about the side effect of setting the children and parent variables by AnyTree
                     node = ModuleNode(module_info, parent)
                     imp(pipeline[1:], parent=node)
 
@@ -62,6 +87,7 @@ def parse_config(path:str) -> Config:
         else:
             raise ValueError("No pipeline found in configuration file")
 
+        # TODO more documentation for this line in particular or rewrite into more clear syntax with for loop or such
         pipeline_trees = sum((_init_pipeline_trees(pipeline_layers) for pipeline_layers in pipeline_layers_lists), [])
         return Config(
             plugins=data["plugins"],
