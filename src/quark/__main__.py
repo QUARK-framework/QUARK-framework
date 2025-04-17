@@ -25,7 +25,10 @@ def start() -> None:
     Main function that triggers the benchmarking process
     """
 
-    set_logger()
+    base_path = Path("benchmark_runs").joinpath(datetime.today().strftime('%Y-%m-%d-%H-%M-%S'))
+    base_path.mkdir(parents=True)
+
+    set_logger(str(base_path.joinpath("logging.log")))
 
     logging.info(" ============================================================ ")
     logging.info(r"             ___    _   _      _      ____    _  __           ")
@@ -78,8 +81,6 @@ def start() -> None:
 
 
     logging.info(" ======================== RESULTS =========================== ")
-    base_path = Path("benchmark_runs").joinpath(datetime.today().strftime('%Y-%m-%d-%H-%M-%S'))
-    base_path.mkdir(parents=True)
     pipelines_path = base_path.joinpath("pipelines")
     pipelines_path.mkdir()
     for i, result in enumerate(pipeline_run_results):
