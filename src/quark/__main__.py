@@ -1,20 +1,27 @@
 from __future__ import annotations
-from dataclasses import dataclass
+
 import json
-from datetime import datetime
-from pathlib import Path
 import logging
 import pickle
-
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 
 from quark.argument_parsing import get_args
+from quark.benchmarking import (
+    FinishedTreeRun,
+    InterruptedTreeRun,
+    ModuleNode,
+    PipelineRunResult,
+    PipelineRunResultEncoder,
+    run_pipeline_tree,
+)
 from quark.config_parsing import parse_config
 from quark.plugin_manager import loader
 from quark.quark_logging import set_logger
-from quark.benchmarking import ModuleNode, PipelineRunResult, FinishedTreeRun, InterruptedTreeRun, PipelineRunResultEncoder, run_pipeline_tree
-
 
 PICKLE_FILE_NAME: str = "intermediate_run_state.pkl"
+
 
 @dataclass(frozen=True)
 class BenchmarkingPickle:
@@ -31,11 +38,11 @@ def start() -> None:
     args = get_args()
     base_path: Path
     plugins = list[str]
-    pipeline_trees:list[ModuleNode] = []
-    pipeline_run_results:list[PipelineRunResult] = []
+    pipeline_trees: list[ModuleNode] = []
+    pipeline_run_results: list[PipelineRunResult] = []
     match args.resume_dir:
-        case None: # New run
-            base_path = Path("benchmark_runs").joinpath(datetime.today().strftime('%Y-%m-%d-%H-%M-%S'))
+        case None:  # New run
+            base_path = Path("benchmark_runs").joinpath(datetime.today().strftime("%Y-%m-%d-%H-%M-%S"))
             base_path.mkdir(parents=True)
             set_logger(str(base_path.joinpath("logging.log")))
             logging.info(" ============================================================ ")
@@ -50,10 +57,11 @@ def start() -> None:
             logging.info("                                                              ")
             logging.info("        Licensed under the Apache License, Version 2.0        ")
             logging.info(" ============================================================ ")
-            config = parse_config(args.config) # This is guaranteed to be set, as resume_dir and config are mutually exclusive and required
+            # This is guaranteed to be set, as resume_dir and config are mutually exclusive and required
+            config = parse_config(args.config)
             plugins = config.plugins
             pipeline_trees = config.pipeline_trees
-        case path_str: # Resumed run
+        case path_str:  # Resumed run
             base_path = Path(path_str)
             if not base_path.is_absolute():
                 base_path = Path("benchmark_runs").joinpath(base_path)
@@ -69,7 +77,6 @@ def start() -> None:
             pipeline_trees = benchmarking_pickle.pipeline_trees
             pipeline_run_results = benchmarking_pickle.pipeline_run_results
 
-
     loader.load_plugins(plugins)
 
     rest_trees: list[ModuleNode] = []
@@ -82,21 +89,19 @@ def start() -> None:
                 rest_trees.append(rest_tree)
 
     if rest_trees:
-        logging.info("Async interrupt: Some modules interrupted execution. Quark will save the current state and exit.")
+        logging.info(
+            "Async interrupt: Some modules interrupted execution. Quark will save the current state and exit."
+        )
         pickle.dump(
-            BenchmarkingPickle(
-                plugins=plugins,
-                pipeline_trees=rest_trees,
-                pipeline_run_results=pipeline_run_results
-            ),
-            open(base_path.joinpath(PICKLE_FILE_NAME), "wb"))
+            BenchmarkingPickle(plugins=plugins, pipeline_trees=rest_trees, pipeline_run_results=pipeline_run_results),
+            open(base_path.joinpath(PICKLE_FILE_NAME), "wb"),
+        )
         return
-
 
     logging.info(" ======================== RESULTS =========================== ")
     pipelines_path = base_path.joinpath("pipelines")
     pipelines_path.mkdir()
-    for i, result in enumerate(pipeline_run_results):
+    for result in pipeline_run_results:
         # dir_name = "benchmark_{i}"
         dir_name = str.join("-", (step.unique_name for step in result.steps))
         dir_path = pipelines_path.joinpath(dir_name)
@@ -107,12 +112,12 @@ def start() -> None:
         logging.info(f"Result: {result.result}")
         logging.info(f"Total time: {result.total_time}")
         logging.info(f"Metrics: {[step.additional_metrics for step in result.steps]}")
-        logging.info("-"*60)
+        logging.info("-" * 60)
 
     logging.info(" ============================================================ ")
     logging.info(" ====================  QUARK finished!   ==================== ")
     logging.info(" ============================================================ ")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     start()

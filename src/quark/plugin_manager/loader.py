@@ -1,6 +1,7 @@
 import importlib
 from typing import Protocol
 
+
 class PluginInterface(Protocol):
     """
     A valid plugin must implement this interface
@@ -15,8 +16,9 @@ class PluginInterface(Protocol):
     def register() -> None:
         pass
 
+
 def import_module(plugin_file: str) -> PluginInterface:
-    return importlib.import_module(plugin_file) # type: ignore
+    return importlib.import_module(plugin_file)  # type: ignore
 
 
 def load_plugins(plugin_files: list[str]) -> None:

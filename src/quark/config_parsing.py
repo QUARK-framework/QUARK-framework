@@ -1,14 +1,17 @@
-from typing import Any
 from dataclasses import dataclass
+from typing import Any
+
 import yaml
 
 from quark.benchmarking import ModuleInfo, ModuleNode
+
 
 @dataclass(frozen=True)
 class Config:
     """
     A wrapper for the relevant config data, parsed from a config yml file
     """
+
     plugins: list[str]
     # Parsing directly to trees in form of ModuleNodes introduces some unfortunate coupling to the benchmarking module.
     # However, doing so prevents returning pipeline_trees in form of some ugly intermediate type.
@@ -16,22 +19,26 @@ class Config:
 
 
 # ====== Types allowed to use in the configuration file ======
-# Explicitly defining these types allows for better type checking and documentation in _init_pipeline_tree and _extract_module_info below
+# Explicitly defining these types allows for better type checking and documentation in _init_pipeline_tree and
+# _extract_module_info below
 #
 # A pipeline module can be specified in two ways:
 # -A single string is interpreted as a single module without parameters
-# -A dictionary with a single key-value pair is interpreted as a single module where the value is another dictionary containing the parameters
+# -A dictionary with a single key-value pair is interpreted as a single module where the value is another dictionary
+# containing the parameters
 ModuleFormat = str | dict[str, dict[str, Any]]
 
 # If one layer of the pipeline consists of multiple modules, each one describes a separate pipeline
 PipelineLayer = ModuleFormat | list[ModuleFormat]
 # ============================================================
 
+
 def _init_module_info(module: ModuleFormat) -> ModuleInfo:
     """
     Creates a ModuleInfo object from data adhering to ModuleFormat
 
-    This function belongs here instead of inside the ModuleInfo class definition because ModuleFormat is only used for parsing the config, not outside.
+    This function belongs here instead of inside the ModuleInfo class definition because ModuleFormat is only used for
+    parsing the config, not outside.
 
     :param module: Data adhering to ModuleFormat
     :return: An instance of ModuleInfo containing the given data
@@ -57,6 +64,7 @@ def _init_pipeline_trees(pipeline: list[PipelineLayer]) -> list[ModuleNode]:
     :param pipeline: TODO
     :return: TODO
     """
+
     def imp(pipeline: list[list[ModuleFormat]], parent: ModuleNode) -> None:
         match pipeline:
             case []:
@@ -71,13 +79,14 @@ def _init_pipeline_trees(pipeline: list[PipelineLayer]) -> list[ModuleNode]:
     pipeline = [layer if isinstance(layer, list) else [layer] for layer in pipeline]
     pipeline_trees = [ModuleNode(_init_module_info(layer)) for layer in pipeline[0]]
     for node in pipeline_trees:
-        imp(pipeline[1:], parent=node) # type: ignore
+        imp(pipeline[1:], parent=node)  # type: ignore
     return pipeline_trees
 
-def parse_config(path:str) -> Config:
+
+def parse_config(path: str) -> Config:
     with open(path) as file:
         data = yaml.load(file, Loader=yaml.FullLoader)
-        pipeline_layers_lists:list[list[PipelineLayer]] = []
+        pipeline_layers_lists: list[list[PipelineLayer]] = []
         if "pipelines" in data:
             pipeline_layers_lists = data["pipelines"]
         elif "pipeline" in data:
@@ -87,7 +96,4 @@ def parse_config(path:str) -> Config:
 
         # TODO more documentation for this line in particular or rewrite into more clear syntax with for loop or such
         pipeline_trees = sum((_init_pipeline_trees(pipeline_layers) for pipeline_layers in pipeline_layers_lists), [])
-        return Config(
-            plugins=data["plugins"],
-            pipeline_trees=pipeline_trees
-        )
+        return Config(plugins=data["plugins"], pipeline_trees=pipeline_trees)

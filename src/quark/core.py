@@ -1,17 +1,22 @@
 from __future__ import annotations
-from dataclasses import dataclass
+
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from dataclasses import dataclass
+from typing import Any
+
 
 @dataclass(frozen=True)
 class AsyncWait:
     pass
 
+
 @dataclass(frozen=True)
 class Backtrack:
     data: Any
 
+
 Interruption = AsyncWait | Backtrack
+
 
 class Core(ABC):
     """
@@ -46,18 +51,21 @@ class Core(ABC):
 
         Is called right after the postprocess method.
         The module's config parameters are written to a file regardless of what is returned here.
-        Best practice is to only include human-readable data that gives insights into the module's performance or results.
+        Best practice is to only include human-readable data that gives insights into the module's performance or
+        results.
 
         :return: Dictionary containing all relevant metrics
         """
         return {}
 
-    def get_unique_name(self) -> Optional[str]:
+    def get_unique_name(self) -> str | None:
         """
         Returns a string representation of the module to be used in the file names for benchmark results
 
-        The string should be human-readable, not too long, and be unique in regards to the parameters given to the module.
-        Two different instances of the same module should return different strings if they were given different parameters.
+        The string should be human-readable, not too long, and be unique in regards to the parameters given to the
+        module.
+        Two different instances of the same module should return different strings if they were given different
+        parameters.
 
         :return: An identifying string of the module instance. If None, a name is chosen automatically.
         """

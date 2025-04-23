@@ -1,14 +1,15 @@
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Any, Optional
-from time import perf_counter
-import logging
+
 import json
+import logging
+from dataclasses import dataclass
+from time import perf_counter
+from typing import Any
 
 from anytree import NodeMixin
 
+from quark.core import AsyncWait, Backtrack, Core, Interruption
 from quark.plugin_manager import factory
-from quark.core import Core, AsyncWait, Backtrack, Interruption
 
 
 # === Module Datatypes ===
@@ -17,13 +18,16 @@ class ModuleInfo:
     name: str
     params: dict[str, Any]
 
+
 @dataclass(frozen=True)
 class ModuleRunMetrics:
     module_info: ModuleInfo
     preprocess_time: float
     postprocess_time: float
     additional_metrics: dict
-    unique_name:str
+    unique_name: str
+
+
 # === Module Datatypes ===
 
 
@@ -31,8 +35,13 @@ class ModuleRunMetrics:
 class PipelineRunResult:
     """
     The result of running one benchmarking pipeline
+
+    Captures the results of one pipeline run, consisting of the result of the last postprocessing step, total time
+    spent in all pre and postprocessing steps combined, and a list of module run metrics for each of the executed
+    modules. This is different from a tree run in that it only represents the result of running one pipeline, while a
+    tree run represents one or more pipeline runs.
     """
-    # TODO write about what this is and how to capture additional metrics in the json (additional_metrics)
+
     result: Any
     total_time: float
     steps: list[ModuleRunMetrics]
@@ -43,10 +52,12 @@ class PipelineRunResult:
 class FinishedTreeRun:
     results: list[PipelineRunResult]
 
+
 @dataclass(frozen=True)
 class InterruptedTreeRun:
     intermediate_results: list[PipelineRunResult]
     rest_tree: ModuleNode
+
 
 TreeRunResult = FinishedTreeRun | InterruptedTreeRun
 # === Tree Results ===
@@ -57,23 +68,21 @@ class ModuleNode(NodeMixin):
     """
     A module node in the pipeline tree
 
-    The module will provide the output of its preprocess step to every child node.
-    Every child module will later provide their postprocess output back to this node.
-    When first created, a module node only stores its module information and its parent node.
-    The module itself is only crated shortly before it is used.
-    The preprocess time is stored after the preprocess step is run.
+    The module will provide the output of its preprocess step to every child node. Every child module will later
+    provide their postprocess output back to this node. When first created, a module node only stores its module
+    information and its parent node. The module itself is only crated shortly before it is used. The preprocess time
+    is stored after the preprocess step is run.
     """
 
     module_info: ModuleInfo
 
-    module: Optional[Core] = None
-    # TODO rename to preprocess is finished
-    finished: bool = False
-    preprocessed_data: Optional[Any] = None
-    preprocess_time: Optional[float] = None
+    module: Core | None = None
+    preprocess_finished: bool = False
+    preprocessed_data: Any | None = None
+    preprocess_time: float | None = None
 
-    def __init__(self, module_info: ModuleInfo, parent: Optional[ModuleNode] = None):
-        super(ModuleNode, self).__init__()
+    def __init__(self, module_info: ModuleInfo, parent: ModuleNode | None = None):
+        super(self).__init__()
         self.module_info = module_info
         self.parent = parent
 
@@ -96,21 +105,23 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
     """
     Runs pipelines by traversing the given pipeline tree
 
-    The pipeline tree represents one or more pipelines, where each node is a module.
-    A node can provide its output to any of its child nodes, each choice representing a distinct pipeline.
-    The tree is traversed in a depth-first manner, storing the result from each preprocess step to re-use as input for each child node.
-    When a leaf node is reached, the tree is traversed back up to the root node, running every postprocessing step along the way.
+    The pipeline tree represents one or more pipelines, where each node is a module. A node can provide its output to
+    any of its child nodes, each choice representing a distinct pipeline. The tree is traversed in a depth-first
+    manner, storing the result from each preprocess step to re-use as input for each child node. When a leaf node is
+    reached, the tree is traversed back up to the root node, running every postprocessing step along the way.
 
     :param pipeline_tree: Root nodes of a pipeline tree, representing one or more pipelines
-    :return: A tuple of a list of BenchmarkRun objects, one for each leaf node, and an optional interruption that is set if an interruption happened
+    :return: A tuple of a list of BenchmarkRun objects, one for each leaf node, and an optional interruption that is
+    set if an interruption happened
     """
 
-    pipeline_run_results:list[PipelineRunResult] = []
-    def imp(node: ModuleNode, depth:int, upstream_data: Any = None) -> Optional[Interruption]:
+    pipeline_run_results: list[PipelineRunResult] = []
+
+    def imp(node: ModuleNode, depth: int, upstream_data: Any = None) -> Interruption | None:
         # set_logger(depth)
 
         logging.info(f"Running preprocess for module {node.module_info}")
-        if node.finished:
+        if node.preprocess_finished:
             logging.info(f"Module {node.module_info} already done, skipping")
             data = node.preprocessed_data
         else:
@@ -130,58 +141,66 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
                 case data:
                     node.preprocess_time = perf_counter() - t1
                     logging.info(f"Preprocess for module {node.module_info} took {node.preprocess_time} seconds")
-                    node.finished = True
+                    node.preprocess_finished = True
                     node.preprocessed_data = data
 
-
         match node.children:
-            case []: # Leaf node; Tail end of pipeline reached
-                # Document somewhere why the postprocess chain is done in this way instead of returning a postprocess result from imp and going from there
+            case []:  # Leaf node; Tail end of pipeline reached
+                # Document somewhere why the postprocess chain is done in this way instead of returning a postprocess
+                # result from imp and going from there
                 logging.info("Arrived at leaf node, starting postprocessing chain")
                 next_node = node
-                steps:list[ModuleRunMetrics] = []
+                steps: list[ModuleRunMetrics] = []
                 while next_node is not None:
                     # set_logger(depth)
-                    assert next_node.module is not None # Otherwise Pylint complains
+                    assert next_node.module is not None  # Otherwise Pylint complains
                     logging.info(f"Running postprocess for module {next_node.module_info}")
                     t1 = perf_counter()
                     match next_node.module.postprocess(data):
-                        case AsyncWait(): # TODO
+                        case AsyncWait():  # TODO
                             logging.info(f"Async interrupt encountered, returning from {node.module_info}")
                             return AsyncWait()
-                        case Backtrack(data): # TODO
+                        case Backtrack(data):  # TODO
                             return
                         case data:
                             postprocess_time = perf_counter() - t1
-                            unique_name:str
+                            unique_name: str
                             match next_node.module.get_unique_name():
                                 case None:
-                                    unique_name = f"{next_node.module_info.name}{str.join("_", (str(v) for v in next_node.module_info.params.values()))}"
+                                    unique_name = next_node.module_info.name + str.join(
+                                        "_", (str(v) for v in next_node.module_info.params.values())
+                                    )
                                 case name:
                                     unique_name = name
-                            assert next_node.preprocess_time is not None # Otherwise Pylint complains
-                            steps.append(ModuleRunMetrics(
-                                module_info=next_node.module_info,
-                                preprocess_time=next_node.preprocess_time,
-                                postprocess_time=postprocess_time,
-                                additional_metrics=next_node.module.get_metrics(),
-                                unique_name=unique_name
-                            ))
-                            logging.info(f"Postprocess for module {next_node.module_info} took {postprocess_time} seconds")
+                            assert next_node.preprocess_time is not None  # Otherwise Pylint complains
+                            steps.append(
+                                ModuleRunMetrics(
+                                    module_info=next_node.module_info,
+                                    preprocess_time=next_node.preprocess_time,
+                                    postprocess_time=postprocess_time,
+                                    additional_metrics=next_node.module.get_metrics(),
+                                    unique_name=unique_name,
+                                )
+                            )
+                            logging.info(
+                                f"Postprocess for module {next_node.module_info} took {postprocess_time} seconds"
+                            )
                             next_node = next_node.parent
                             depth -= 1
                 steps.reverse()
-                pipeline_run_results.append(PipelineRunResult(
-                    result=data,
-                    total_time=sum(step.preprocess_time + step.postprocess_time for step in steps),
-                    steps=steps
-                ))
+                pipeline_run_results.append(
+                    PipelineRunResult(
+                        result=data,
+                        total_time=sum(step.preprocess_time + step.postprocess_time for step in steps),
+                        steps=steps,
+                    )
+                )
                 logging.info("Finished postprocessing chain")
 
             case children:
                 encountered_async_wait: bool = False
                 for child in children:
-                    match imp(child, depth+1, data):
+                    match imp(child, depth + 1, data):
                         case None:
                             child.parent = None
                         case AsyncWait():
@@ -191,13 +210,15 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
                 if encountered_async_wait:
                     return AsyncWait()
 
-
     # logging.info("")
     # logging.info(f"Running pipeline tree:\n{RenderTree(pipeline_tree)}")
     match imp(pipeline_tree, 0):
         case None:
             return FinishedTreeRun(results=pipeline_run_results)
         case AsyncWait():
-            return InterruptedTreeRun(intermediate_results=pipeline_run_results, rest_tree=pipeline_tree)
+            return InterruptedTreeRun(
+                intermediate_results=pipeline_run_results,
+                rest_tree=pipeline_tree,
+            )
         case _:
             raise Exception("No other interrupt than AsyncWait is allowed to be returned from the root node")
