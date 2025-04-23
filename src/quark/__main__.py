@@ -14,8 +14,11 @@ from quark.quark_logging import set_logger
 from quark.benchmarking import ModuleNode, PipelineRunResult, FinishedTreeRun, InterruptedTreeRun, PipelineRunResultEncoder, run_pipeline_tree
 
 
+PICKLE_FILE_NAME: str = "intermediate_run_state.pkl"
+
 @dataclass(frozen=True)
 class BenchmarkingPickle:
+    plugins: list[str]
     pipeline_trees: list[ModuleNode]
     pipeline_run_results: list[PipelineRunResult]
 
@@ -25,40 +28,49 @@ def start() -> None:
     Main function that triggers the benchmarking process
     """
 
-    base_path = Path("benchmark_runs").joinpath(datetime.today().strftime('%Y-%m-%d-%H-%M-%S'))
-    base_path.mkdir(parents=True)
-
-    set_logger(str(base_path.joinpath("logging.log")))
-
-    logging.info(" ============================================================ ")
-    logging.info(r"             ___    _   _      _      ____    _  __           ")
-    logging.info(r"            / _ \  | | | |    / \    |  _ \  | |/ /           ")
-    logging.info(r"           | | | | | | | |   / _ \   | |_) | | ' /            ")
-    logging.info(r"           | |_| | | |_| |  / ___ \  |  _ <  | . \            ")
-    logging.info(r"            \__\_\  \___/  /_/   \_\ |_| \_\ |_|\_\           ")
-    logging.info("                                                              ")
-    logging.info(" ============================================================ ")
-    logging.info("  A Framework for Quantum Computing Application Benchmarking  ")
-    logging.info("                                                              ")
-    logging.info("        Licensed under the Apache License, Version 2.0        ")
-    logging.info(" ============================================================ ")
-
-
     args = get_args()
-    config = parse_config(args.config)
-    loader.load_plugins(config.plugins)
-
-    pipeline_trees:list[ModuleNode] = config.pipeline_trees
+    base_path: Path
+    plugins = list[str]
+    pipeline_trees:list[ModuleNode] = []
     pipeline_run_results:list[PipelineRunResult] = []
+    match args.resume_dir:
+        case None: # New run
+            base_path = Path("benchmark_runs").joinpath(datetime.today().strftime('%Y-%m-%d-%H-%M-%S'))
+            base_path.mkdir(parents=True)
+            set_logger(str(base_path.joinpath("logging.log")))
+            logging.info(" ============================================================ ")
+            logging.info(r"             ___    _   _      _      ____    _  __           ")
+            logging.info(r"            / _ \  | | | |    / \    |  _ \  | |/ /           ")
+            logging.info(r"           | | | | | | | |   / _ \   | |_) | | ' /            ")
+            logging.info(r"           | |_| | | |_| |  / ___ \  |  _ <  | . \            ")
+            logging.info(r"            \__\_\  \___/  /_/   \_\ |_| \_\ |_|\_\           ")
+            logging.info("                                                              ")
+            logging.info(" ============================================================ ")
+            logging.info("  A Framework for Quantum Computing Application Benchmarking  ")
+            logging.info("                                                              ")
+            logging.info("        Licensed under the Apache License, Version 2.0        ")
+            logging.info(" ============================================================ ")
+            config = parse_config(args.config) # This is guaranteed to be set, as resume_dir and config are mutually exclusive and required
+            plugins = config.plugins
+            pipeline_trees = config.pipeline_trees
+        case path_str: # Resumed run
+            base_path = Path(path_str)
+            if not base_path.is_absolute():
+                base_path = Path("benchmark_runs").joinpath(base_path)
+            pickle_file_path = base_path.joinpath(PICKLE_FILE_NAME)
+            if not pickle_file_path.is_file():
+                print("Error: No pickle file found in the specified resume_dir")
+                exit(1)
+            set_logger(str(base_path.joinpath("logging.log")))
+            logging.info("")
+            logging.info("Resuming benchmarking from data found in pickle file.")
+            benchmarking_pickle: BenchmarkingPickle = pickle.load(open(pickle_file_path, "rb"))
+            plugins = benchmarking_pickle.plugins
+            pipeline_trees = benchmarking_pickle.pipeline_trees
+            pipeline_run_results = benchmarking_pickle.pipeline_run_results
 
-    # TODO document the fact that the pipeline trees are overwritten and that the run id could be read beforehand
-    pickle_file_path = f"{config.run_id}.pkl"
-    if Path(pickle_file_path).is_file(): # Override trees and intermediate results with pickled values
-        logging.info(f"Pickle file matching run id found: {pickle_file_path}")
-        logging.info("Continuing benchmarking from data found in pickle file.")
-        benchmarking_pickle: BenchmarkingPickle = pickle.load(open(pickle_file_path, "rb"))
-        pipeline_trees = benchmarking_pickle.pipeline_trees
-        pipeline_run_results = benchmarking_pickle.pipeline_run_results
+
+    loader.load_plugins(plugins)
 
     rest_trees: list[ModuleNode] = []
     for pipeline_tree in pipeline_trees:
@@ -73,10 +85,11 @@ def start() -> None:
         logging.info("Async interrupt: Some modules interrupted execution. Quark will save the current state and exit.")
         pickle.dump(
             BenchmarkingPickle(
+                plugins=plugins,
                 pipeline_trees=rest_trees,
                 pipeline_run_results=pipeline_run_results
             ),
-            open(pickle_file_path, "wb"))
+            open(base_path.joinpath(PICKLE_FILE_NAME), "wb"))
         return
 
 

@@ -1,7 +1,6 @@
 from typing import Any
 from dataclasses import dataclass
 import yaml
-import uuid
 
 from quark.benchmarking import ModuleInfo, ModuleNode
 
@@ -14,7 +13,6 @@ class Config:
     # Parsing directly to trees in form of ModuleNodes introduces some unfortunate coupling to the benchmarking module.
     # However, doing so prevents returning pipeline_trees in form of some ugly intermediate type.
     pipeline_trees: list[ModuleNode]
-    run_id: str
 
 
 # ====== Types allowed to use in the configuration file ======
@@ -91,6 +89,5 @@ def parse_config(path:str) -> Config:
         pipeline_trees = sum((_init_pipeline_trees(pipeline_layers) for pipeline_layers in pipeline_layers_lists), [])
         return Config(
             plugins=data["plugins"],
-            pipeline_trees=pipeline_trees,
-            run_id=str(data["run_id"] if "run_id" in data else uuid.uuid4())
+            pipeline_trees=pipeline_trees
         )
