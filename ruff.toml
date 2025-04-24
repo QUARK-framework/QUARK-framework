@@ -1,0 +1,17 @@
+line-length = 120
+
+[lint]
+select = ["ALL"]
+ignore = [
+    "TD",     # flake8-todos
+    "FIX",    # flake8-fixme
+    "G",      # flake8-logging-format
+    "C90",    # mccabe
+    "PLR",    # Pylint refactor
+    "LOG015", # root-logger-call
+    "PGH003", # blanket-type-ignore
+]
+
+[format]
+docstring-code-format = true
+docstring-code-line-length = 72
