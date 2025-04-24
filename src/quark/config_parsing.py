@@ -1,4 +1,7 @@
+import functools
+import operator
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import yaml
@@ -8,9 +11,7 @@ from quark.benchmarking import ModuleInfo, ModuleNode
 
 @dataclass(frozen=True)
 class Config:
-    """
-    A wrapper for the relevant config data, parsed from a config yml file
-    """
+    """A wrapper for the relevant config data, parsed from a config yml file."""
 
     plugins: list[str]
     # Parsing directly to trees in form of ModuleNodes introduces some unfortunate coupling to the benchmarking module.
@@ -34,8 +35,7 @@ PipelineLayer = ModuleFormat | list[ModuleFormat]
 
 
 def _init_module_info(module: ModuleFormat) -> ModuleInfo:
-    """
-    Creates a ModuleInfo object from data adhering to ModuleFormat
+    """Create a ModuleInfo object from data adhering to ModuleFormat.
 
     This function belongs here instead of inside the ModuleInfo class definition because ModuleFormat is only used for
     parsing the config, not outside.
@@ -53,8 +53,7 @@ def _init_module_info(module: ModuleFormat) -> ModuleInfo:
 
 
 def _init_pipeline_trees(pipeline: list[PipelineLayer]) -> list[ModuleNode]:
-    """
-    Creates pipeline trees from lists of data adhering to PipelineLayer
+    """Create pipeline trees from lists of data adhering to PipelineLayer.
 
     Each layer of a pipeline defined in the config file can contain one or more modules.
     The function starts by creating a root node for each module in the first layer.
@@ -84,16 +83,17 @@ def _init_pipeline_trees(pipeline: list[PipelineLayer]) -> list[ModuleNode]:
 
 
 def parse_config(path: str) -> Config:
-    with open(path) as file:
-        data = yaml.load(file, Loader=yaml.FullLoader)
+    with Path(path).open() as file:
+        data = yaml.load(file, Loader=yaml.FullLoader) # noqa: S506
         pipeline_layers_lists: list[list[PipelineLayer]] = []
         if "pipelines" in data:
             pipeline_layers_lists = data["pipelines"]
         elif "pipeline" in data:
             pipeline_layers_lists = [data["pipeline"]]
         else:
-            raise ValueError("No pipeline found in configuration file")
+            message = "No pipeline found in configuration file"
+            raise ValueError(message)
 
         # TODO more documentation for this line in particular or rewrite into more clear syntax with for loop or such
-        pipeline_trees = sum((_init_pipeline_trees(pipeline_layers) for pipeline_layers in pipeline_layers_lists), [])
+        pipeline_trees = functools.reduce(operator.iadd, (_init_pipeline_trees(pipeline_layers) for pipeline_layers in pipeline_layers_lists), [])
         return Config(plugins=data["plugins"], pipeline_trees=pipeline_trees)

@@ -2,9 +2,7 @@ import logging
 
 
 def set_logger(path: str, depth: int = 0) -> None:
-    """
-    Sets up the logger to also write to a file in the store directory.
-    """
+    """Set up the logger to also write to a file in the store directory."""
     logging.getLogger().handlers = []
     logging.basicConfig(
         level=logging.INFO,

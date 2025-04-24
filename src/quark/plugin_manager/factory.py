@@ -18,7 +18,8 @@ def create(plugin_type: str, arguments: dict[str, Any]) -> Core:
     try:
         creator_func = plugin_creation_funcs[plugin_type]
     except KeyError as exc:
-        raise ValueError(f"Unknown plugin type {plugin_type!r}") from exc
+        message = f"Unknown plugin type {plugin_type!r}"
+        raise ValueError(message) from exc
 
     # TODO is this syntax still necessary if arguments is no longer optional
     return creator_func(**(arguments or {}))

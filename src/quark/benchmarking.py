@@ -33,8 +33,7 @@ class ModuleRunMetrics:
 
 @dataclass(frozen=True)
 class PipelineRunResult:
-    """
-    The result of running one benchmarking pipeline
+    """The result of running one benchmarking pipeline.
 
     Captures the results of one pipeline run, consisting of the result of the last postprocessing step, total time
     spent in all pre and postprocessing steps combined, and a list of module run metrics for each of the executed
@@ -65,8 +64,7 @@ TreeRunResult = FinishedTreeRun | InterruptedTreeRun
 
 @dataclass
 class ModuleNode(NodeMixin):
-    """
-    A module node in the pipeline tree
+    """A module node in the pipeline tree.
 
     The module will provide the output of its preprocess step to every child node. Every child module will later
     provide their postprocess output back to this node. When first created, a module node only stores its module
@@ -81,7 +79,7 @@ class ModuleNode(NodeMixin):
     preprocessed_data: Any | None = None
     preprocess_time: float | None = None
 
-    def __init__(self, module_info: ModuleInfo, parent: ModuleNode | None = None):
+    def __init__(self, module_info: ModuleInfo, parent: ModuleNode | None = None) -> None:
         super().__init__()
         self.module_info = module_info
         self.parent = parent
@@ -102,8 +100,7 @@ class PipelineRunResultEncoder(json.JSONEncoder):
 
 
 def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
-    """
-    Runs pipelines by traversing the given pipeline tree
+    """Run pipelines by traversing the given pipeline tree.
 
     The pipeline tree represents one or more pipelines, where each node is a module. A node can provide its output to
     any of its child nodes, each choice representing a distinct pipeline. The tree is traversed in a depth-first
@@ -114,10 +111,9 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
     :return: A tuple of a list of BenchmarkRun objects, one for each leaf node, and an optional interruption that is
     set if an interruption happened
     """
-
     pipeline_run_results: list[PipelineRunResult] = []
 
-    def imp(node: ModuleNode, depth: int, upstream_data: Any = None) -> Interruption | None:
+    def imp(node: ModuleNode, depth: int, upstream_data: Any = None) -> Interruption | None:  # noqa: ANN401
         # set_logger(depth)
 
         logging.info(f"Running preprocess for module {node.module_info}")
@@ -125,11 +121,10 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
             logging.info(f"Module {node.module_info} already done, skipping")
             data = node.preprocessed_data
         else:
-            # TODO is this if statement necessary?
+            # TODO: is this if statement necessary?
             if node.module is None:
                 logging.info(f"Creating module instance for {node.module_info}")
                 node.module = factory.create(node.module_info.name, node.module_info.params)
-            assert node.module is not None
             t1 = perf_counter()
             match node.module.preprocess(upstream_data):
                 case AsyncWait():
@@ -137,7 +132,7 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
                     return AsyncWait()
                 case Backtrack(data):
                     # TODO
-                    return
+                    return None
                 case data:
                     node.preprocess_time = perf_counter() - t1
                     logging.info(f"Preprocess for module {node.module_info} took {node.preprocess_time} seconds")
@@ -146,14 +141,14 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
 
         match node.children:
             case []:  # Leaf node; Tail end of pipeline reached
-                # Document somewhere why the postprocess chain is done in this way instead of returning a postprocess
-                # result from imp and going from there
+                # TODO Document somewhere why the postprocess chain is done in this way instead of returning a
+                # postprocess result from imp and going from there
                 logging.info("Arrived at leaf node, starting postprocessing chain")
                 next_node = node
                 steps: list[ModuleRunMetrics] = []
                 while next_node is not None:
                     # set_logger(depth)
-                    assert next_node.module is not None  # Otherwise Pylint complains
+                    assert next_node.module is not None  # noqa: S101 Otherwise Pylint complains
                     logging.info(f"Running postprocess for module {next_node.module_info}")
                     t1 = perf_counter()
                     match next_node.module.postprocess(data):
@@ -161,18 +156,19 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
                             logging.info(f"Async interrupt encountered, returning from {node.module_info}")
                             return AsyncWait()
                         case Backtrack(data):  # TODO
-                            return
+                            return None
                         case data:
                             postprocess_time = perf_counter() - t1
                             unique_name: str
                             match next_node.module.get_unique_name():
                                 case None:
                                     unique_name = next_node.module_info.name + str.join(
-                                        "_", (str(v) for v in next_node.module_info.params.values())
+                                        "_",
+                                        (str(v) for v in next_node.module_info.params.values()),
                                     )
                                 case name:
                                     unique_name = name
-                            assert next_node.preprocess_time is not None  # Otherwise Pylint complains
+                            assert next_node.preprocess_time is not None  # noqa: S101 Otherwise Pylint complains
                             steps.append(
                                 ModuleRunMetrics(
                                     module_info=next_node.module_info,
@@ -180,10 +176,10 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
                                     postprocess_time=postprocess_time,
                                     additional_metrics=next_node.module.get_metrics(),
                                     unique_name=unique_name,
-                                )
+                                ),
                             )
                             logging.info(
-                                f"Postprocess for module {next_node.module_info} took {postprocess_time} seconds"
+                                f"Postprocess for module {next_node.module_info} took {postprocess_time} seconds",
                             )
                             next_node = next_node.parent
                             depth -= 1
@@ -193,9 +189,10 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
                         result=data,
                         total_time=sum(step.preprocess_time + step.postprocess_time for step in steps),
                         steps=steps,
-                    )
+                    ),
                 )
                 logging.info("Finished postprocessing chain")
+                return None
 
             case children:
                 encountered_async_wait: bool = False
@@ -206,12 +203,12 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
                         case AsyncWait():
                             encountered_async_wait = True
                         case _:
-                            raise Exception("Root nodes may not return any Interruption other than AsyncWait")
+                            message = "Root nodes may not return any Interruption other than AsyncWait"
+                            raise Exception(message)  # noqa: TRY002
                 if encountered_async_wait:
                     return AsyncWait()
+                return None
 
-    # logging.info("")
-    # logging.info(f"Running pipeline tree:\n{RenderTree(pipeline_tree)}")
     match imp(pipeline_tree, 0):
         case None:
             return FinishedTreeRun(results=pipeline_run_results)
@@ -221,4 +218,5 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
                 rest_tree=pipeline_tree,
             )
         case _:
-            raise Exception("No other interrupt than AsyncWait is allowed to be returned from the root node")
+            message = "No other interrupt than AsyncWait is allowed to be returned from the root node"
+            raise Exception(message)  # noqa: TRY002

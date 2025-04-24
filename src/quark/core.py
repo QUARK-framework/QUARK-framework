@@ -19,35 +19,34 @@ Interruption = AsyncWait | Backtrack
 
 
 class Core(ABC):
-    """
-    Core Module interface, implemented by all other Modules that are part of a benchmark pipeline.
-    """
+    """Core Module interface, implemented by all other Modules that are part of a benchmark pipeline."""
 
     @abstractmethod
-    def preprocess(self, data: Any) -> Interruption | Any:
-        """
-        Essential method for the benchmarking process. This is always executed before traversing down
+    def preprocess(self, data: Any) -> Interruption | Any:  # noqa: ANN401
+        """Essential method for the benchmarking process.
+
+        This is always executed before traversing down
         to the next module, passing the data returned by this function.
 
         :param data: Data for the module, comes from the parent module if that exists
         :return: The processed data or an Interruption enum
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @abstractmethod
-    def postprocess(self, data: Any) -> Interruption | Any:
-        """
-        Essential Method for the benchmarking process. Is always executed after the submodule is finished. The data by
+    def postprocess(self, data: Any) -> Interruption | Any:  # noqa: ANN401
+        """Essential Method for the benchmarking process.
+
+        Is always executed after the submodule is finished. The data by
         this method is passed up to the parent module.
 
         :param data: Input data comes from the submodule if that exists
         :return: The processed data or an Interruption enum
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def get_metrics(self) -> dict:
-        """
-        Returns all relevant, human-readable metrics of the module to be written to a json file for later analysis
+        """Return all relevant, human-readable metrics of the module to be written to a json file for later analysis.
 
         Is called right after the postprocess method.
         The module's config parameters are written to a file regardless of what is returned here.
@@ -59,8 +58,7 @@ class Core(ABC):
         return {}
 
     def get_unique_name(self) -> str | None:
-        """
-        Returns a string representation of the module to be used in the file names for benchmark results
+        """Return a string representation of the module to be used in the file names for benchmark results.
 
         The string should be human-readable, not too long, and be unique in regards to the parameters given to the
         module.

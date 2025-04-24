@@ -1,13 +1,14 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 
-import numpy as np
 import networkx as nx
+import numpy as np
 
 
 @dataclass
 class Graph:
-    _g:nx.Graph
+    _g: nx.Graph
 
     @staticmethod
     def from_nx_graph(g: nx.Graph) -> Graph:

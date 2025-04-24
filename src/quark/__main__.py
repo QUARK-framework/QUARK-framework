@@ -31,10 +31,7 @@ class BenchmarkingPickle:
 
 
 def start() -> None:
-    """
-    Main function that triggers the benchmarking process
-    """
-
+    """Start the benchmarking process."""
     args = get_args()
     base_path: Path
     plugins = list[str]
@@ -42,7 +39,7 @@ def start() -> None:
     pipeline_run_results: list[PipelineRunResult] = []
     match args.resume_dir:
         case None:  # New run
-            base_path = Path("benchmark_runs").joinpath(datetime.today().strftime("%Y-%m-%d-%H-%M-%S"))
+            base_path = Path("benchmark_runs").joinpath(datetime.today().strftime("%Y-%m-%d-%H-%M-%S"))  # noqa: DTZ002
             base_path.mkdir(parents=True)
             set_logger(str(base_path.joinpath("logging.log")))
             logging.info(" ============================================================ ")
@@ -67,12 +64,13 @@ def start() -> None:
                 base_path = Path("benchmark_runs").joinpath(base_path)
             pickle_file_path = base_path.joinpath(PICKLE_FILE_NAME)
             if not pickle_file_path.is_file():
-                print("Error: No pickle file found in the specified resume_dir")
+                print("Error: No pickle file found in the specified resume_dir")  # noqa: T201
                 exit(1)
             set_logger(str(base_path.joinpath("logging.log")))
             logging.info("")
             logging.info("Resuming benchmarking from data found in pickle file.")
-            benchmarking_pickle: BenchmarkingPickle = pickle.load(open(pickle_file_path, "rb"))
+            with Path.open(pickle_file_path, "rb") as f:
+                benchmarking_pickle: BenchmarkingPickle = pickle.load(f)  # noqa: S301
             plugins = benchmarking_pickle.plugins
             pipeline_trees = benchmarking_pickle.pipeline_trees
             pipeline_run_results = benchmarking_pickle.pipeline_run_results
@@ -90,12 +88,17 @@ def start() -> None:
 
     if rest_trees:
         logging.info(
-            "Async interrupt: Some modules interrupted execution. Quark will save the current state and exit."
+            "Async interrupt: Some modules interrupted execution. Quark will save the current state and exit.",
         )
-        pickle.dump(
-            BenchmarkingPickle(plugins=plugins, pipeline_trees=rest_trees, pipeline_run_results=pipeline_run_results),
-            open(base_path.joinpath(PICKLE_FILE_NAME), "wb"),
-        )
+        with Path.open(base_path.joinpath(PICKLE_FILE_NAME), "wb") as f:
+            pickle.dump(
+                BenchmarkingPickle(
+                    plugins=plugins,
+                    pipeline_trees=rest_trees,
+                    pipeline_run_results=pipeline_run_results,
+                ),
+                f,
+            )
         return
 
     logging.info(" ======================== RESULTS =========================== ")
