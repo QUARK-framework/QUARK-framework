@@ -82,7 +82,7 @@ class ModuleNode(NodeMixin):
     preprocess_time: float | None = None
 
     def __init__(self, module_info: ModuleInfo, parent: ModuleNode | None = None):
-        super(self).__init__()
+        super().__init__()
         self.module_info = module_info
         self.parent = parent
 
