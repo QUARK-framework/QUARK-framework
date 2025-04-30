@@ -6,8 +6,8 @@ from typing import Any
 
 
 @dataclass(frozen=True)
-class AsyncWait:
-    pass
+class Sleep:
+    stored_data: Any
 
 
 @dataclass(frozen=True)
@@ -15,7 +15,7 @@ class Backtrack:
     data: Any
 
 
-Interruption = AsyncWait | Backtrack
+Interruption = Sleep | Backtrack
 
 
 class Core(ABC):

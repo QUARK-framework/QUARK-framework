@@ -3,13 +3,15 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
+from itertools import chain
 from time import perf_counter
 from typing import Any
 
 from anytree import NodeMixin
 
-from quark.core import AsyncWait, Backtrack, Core, Interruption
+from quark.core import Backtrack, Core, Sleep
 from quark.plugin_manager import factory
+from quark.quark_logging import set_logging_depth
 
 
 # === Module Datatypes ===
@@ -27,12 +29,38 @@ class ModuleRunMetrics:
     additional_metrics: dict
     unique_name: str
 
+    @classmethod
+    def create(
+        cls,
+        module_info: ModuleInfo,
+        module: Core,
+        preprocess_time: float,
+        postprocess_time: float,
+    ) -> ModuleRunMetrics:
+        unique_name: str
+        match module.get_unique_name():
+            case None:
+                unique_name = module_info.name + str.join(
+                    "_",
+                    (str(v) for v in module_info.params.values()),
+                )
+            case name:
+                unique_name = name
+        return cls(
+            module_info=module_info,
+            preprocess_time=preprocess_time,
+            postprocess_time=postprocess_time,
+            additional_metrics=module.get_metrics(),
+            unique_name=unique_name,
+        )
+
 
 # === Module Datatypes ===
 
 
+# === Pipeline Run Progress ===
 @dataclass(frozen=True)
-class PipelineRunResult:
+class FinishedPipelineRun:
     """The result of running one benchmarking pipeline.
 
     Captures the results of one pipeline run, consisting of the result of the last postprocessing step, total time
@@ -42,24 +70,50 @@ class PipelineRunResult:
     """
 
     result: Any
-    total_time: float
     steps: list[ModuleRunMetrics]
+
+
+@dataclass(frozen=True)
+class InProgressPipelineRun:
+    downstream_data: Any
+    metrics_up_to_now: list[ModuleRunMetrics]
+
+
+@dataclass(frozen=True)
+class PausedPipelineRun:
+    pass
+
+
+PipelineRunStatus = InProgressPipelineRun | PausedPipelineRun
+# === Pipeline Run Progress ===
 
 
 # === Tree Results ===
 @dataclass(frozen=True)
 class FinishedTreeRun:
-    results: list[PipelineRunResult]
+    finished_pipeline_runs: list[FinishedPipelineRun]
 
 
 @dataclass(frozen=True)
 class InterruptedTreeRun:
-    intermediate_results: list[PipelineRunResult]
+    finished_pipeline_runs: list[FinishedPipelineRun]
+    paused_pipeline_runs: list[PausedPipelineRun]
     rest_tree: ModuleNode
 
 
 TreeRunResult = FinishedTreeRun | InterruptedTreeRun
 # === Tree Results ===
+
+
+# @dataclass(frozen=True)
+# class PreprocessResult:
+#     time: float
+#     data: Any
+
+# @dataclass(frozen=True)
+# class PostprocessResult:
+#     time: float
+#     data: Any
 
 
 @dataclass
@@ -73,11 +127,17 @@ class ModuleNode(NodeMixin):
     """
 
     module_info: ModuleInfo
+    module: Core | None = None  # The module is not created before it is needed
 
-    module: Core | None = None
     preprocess_finished: bool = False
-    preprocessed_data: Any | None = None
     preprocess_time: float | None = None
+    preprocessed_data: Any | None = None
+
+    interrupted_during_preprocess = False
+    data_stored_by_preprocess_interrupt: Any | None = None
+
+    interrupted_during_postprocess = False
+    data_stored_by_postprocess_interrupt: list[InProgressPipelineRun] | None = None
 
     def __init__(self, module_info: ModuleInfo, parent: ModuleNode | None = None) -> None:
         super().__init__()
@@ -87,15 +147,13 @@ class ModuleNode(NodeMixin):
 
 class PipelineRunResultEncoder(json.JSONEncoder):
     def default(self, o: Any) -> Any:
-        if not isinstance(o, PipelineRunResult):
+        if not isinstance(o, FinishedPipelineRun):
             # Let the base class default method raise the TypeError
             return super().default(o)
         d = o.__dict__.copy()
         d["steps"] = [step.__dict__ for step in o.steps]
         for step in d["steps"]:
             step["module_info"] = step["module_info"].__dict__
-            # TODO can I remove this line?
-            step["module_info"].pop("preprocessed_data", None)
         return d
 
 
@@ -111,112 +169,101 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
     :return: A tuple of a list of BenchmarkRun objects, one for each leaf node, and an optional interruption that is
     set if an interruption happened
     """
-    pipeline_run_results: list[PipelineRunResult] = []
 
-    def imp(node: ModuleNode, depth: int, upstream_data: Any = None) -> Interruption | None:  # noqa: ANN401
-        # set_logger(depth)
-
+    def imp(
+        node: ModuleNode,
+        upstream_data: Any,  # noqa: ANN401
+        depth: int,
+    ) -> list[PipelineRunStatus]:
+        set_logging_depth(depth)
         logging.info(f"Running preprocess for module {node.module_info}")
-        if node.preprocess_finished:
-            logging.info(f"Module {node.module_info} already done, skipping")
-            data = node.preprocessed_data
+
+        preprocessed_data: Any
+        if node.module is None:
+            logging.info(f"Creating module instance for {node.module_info}")
+            node.module = factory.create(node.module_info.name, node.module_info.params)
+        if node.preprocess_finished:  # After an interrupted run is resumed, some steps will already be finished
+            logging.info(f"Preprocessing of module {node.module_info} already done, skipping")
+            preprocessed_data = node.preprocessed_data
         else:
-            # TODO: is this if statement necessary?
-            if node.module is None:
-                logging.info(f"Creating module instance for {node.module_info}")
-                node.module = factory.create(node.module_info.name, node.module_info.params)
+            if node.interrupted_during_preprocess:
+                upstream_data = node.data_stored_by_preprocess_interrupt
             t1 = perf_counter()
             match node.module.preprocess(upstream_data):
-                case AsyncWait():
-                    logging.info(f"Async interrupt encountered, returning from {node.module_info}")
-                    return AsyncWait()
-                case Backtrack(data):
+                case Sleep(stored_data):
+                    node.interrupted_during_preprocess = True
+                    node.data_stored_by_preprocess_interrupt = stored_data
+                    return [PausedPipelineRun()]
+                case Backtrack(_):
                     # TODO
-                    return None
-                case data:
+                    raise NotImplementedError
+                case preprocessed_data:
                     node.preprocess_time = perf_counter() - t1
                     logging.info(f"Preprocess for module {node.module_info} took {node.preprocess_time} seconds")
                     node.preprocess_finished = True
-                    node.preprocessed_data = data
+                    node.preprocessed_data = preprocessed_data
 
-        match node.children:
-            case []:  # Leaf node; Tail end of pipeline reached
-                # TODO Document somewhere why the postprocess chain is done in this way instead of returning a
-                # postprocess result from imp and going from there
-                logging.info("Arrived at leaf node, starting postprocessing chain")
-                next_node = node
-                steps: list[ModuleRunMetrics] = []
-                while next_node is not None:
-                    # set_logger(depth)
-                    assert next_node.module is not None  # noqa: S101 Otherwise Pylint complains
-                    logging.info(f"Running postprocess for module {next_node.module_info}")
-                    t1 = perf_counter()
-                    match next_node.module.postprocess(data):
-                        case AsyncWait():  # TODO
-                            logging.info(f"Async interrupt encountered, returning from {node.module_info}")
-                            return AsyncWait()
-                        case Backtrack(data):  # TODO
-                            return None
-                        case data:
-                            postprocess_time = perf_counter() - t1
-                            unique_name: str
-                            match next_node.module.get_unique_name():
-                                case None:
-                                    unique_name = next_node.module_info.name + str.join(
-                                        "_",
-                                        (str(v) for v in next_node.module_info.params.values()),
-                                    )
-                                case name:
-                                    unique_name = name
-                            assert next_node.preprocess_time is not None  # noqa: S101 Otherwise Pylint complains
-                            steps.append(
-                                ModuleRunMetrics(
-                                    module_info=next_node.module_info,
-                                    preprocess_time=next_node.preprocess_time,
+        assert node.module is not None  # noqa: S101 Otherwise Pylint complains
+        assert node.preprocess_time is not None  # noqa: S101 Otherwise Pylint complains
+
+        results: list[PipelineRunStatus] = []  # Will be returned later
+        downstream_results = (
+            (imp(child, preprocessed_data, depth + 1) for child in node.children)
+            if node.children
+            else iter([[InProgressPipelineRun(downstream_data=None, metrics_up_to_now=[])]])
+        )
+        if node.data_stored_by_postprocess_interrupt is not None:
+            downstream_results = chain(downstream_results, iter([node.data_stored_by_postprocess_interrupt]))
+
+        for downstream_result in downstream_results:
+            set_logging_depth(depth)
+            for pipeline_run_status in downstream_result:
+                match pipeline_run_status:
+                    case PausedPipelineRun():
+                        results.append(pipeline_run_status)
+                    case InProgressPipelineRun(downstream_data, metrics_up_to_now):
+                        logging.info(f"Running postprocess for module {node.module_info}")
+                        t1 = perf_counter()
+                        match node.module.postprocess(downstream_data):
+                            case Sleep(stored_data):
+                                # TODO
+                                raise NotImplementedError
+                            case Backtrack():
+                                # TODO
+                                raise NotImplementedError
+                            case postprocessed_data:
+                                postprocess_time = perf_counter() - t1
+                                logging.info(
+                                    f"Postprocess for module {node.module_info} took {postprocess_time} seconds",
+                                )
+                                module_run_metrics = ModuleRunMetrics.create(
+                                    module_info=node.module_info,
+                                    module=node.module,
+                                    preprocess_time=node.preprocess_time,
                                     postprocess_time=postprocess_time,
-                                    additional_metrics=next_node.module.get_metrics(),
-                                    unique_name=unique_name,
-                                ),
-                            )
-                            logging.info(
-                                f"Postprocess for module {next_node.module_info} took {postprocess_time} seconds",
-                            )
-                            next_node = next_node.parent
-                            depth -= 1
-                steps.reverse()
-                pipeline_run_results.append(
-                    PipelineRunResult(
-                        result=data,
-                        total_time=sum(step.preprocess_time + step.postprocess_time for step in steps),
-                        steps=steps,
-                    ),
-                )
-                logging.info("Finished postprocessing chain")
-                return None
+                                )
+                                results.append(
+                                    InProgressPipelineRun(
+                                        downstream_data=postprocessed_data,
+                                        metrics_up_to_now=[*metrics_up_to_now, module_run_metrics],
+                                    ),
+                                )
+        return results
 
-            case children:
-                encountered_async_wait: bool = False
-                for child in children:
-                    match imp(child, depth + 1, data):
-                        case None:
-                            child.parent = None
-                        case AsyncWait():
-                            encountered_async_wait = True
-                        case _:
-                            message = "Root nodes may not return any Interruption other than AsyncWait"
-                            raise Exception(message)  # noqa: TRY002
-                if encountered_async_wait:
-                    return AsyncWait()
-                return None
+    results = imp(pipeline_tree, None, 0)
 
-    match imp(pipeline_tree, 0):
-        case None:
-            return FinishedTreeRun(results=pipeline_run_results)
-        case AsyncWait():
-            return InterruptedTreeRun(
-                intermediate_results=pipeline_run_results,
-                rest_tree=pipeline_tree,
-            )
-        case _:
-            message = "No other interrupt than AsyncWait is allowed to be returned from the root node"
-            raise Exception(message)  # noqa: TRY002
+    finished_pipeline_runs = [
+        FinishedPipelineRun(result=r.downstream_data, steps=r.metrics_up_to_now)
+        for r in results
+        if isinstance(r, InProgressPipelineRun)
+    ]
+
+    paused_pipeline_runs = [r for r in results if isinstance(r, PausedPipelineRun)]
+
+    if paused_pipeline_runs:
+        return InterruptedTreeRun(
+            finished_pipeline_runs=finished_pipeline_runs,
+            paused_pipeline_runs=paused_pipeline_runs,
+            rest_tree=pipeline_tree,
+        )
+    return FinishedTreeRun(finished_pipeline_runs=finished_pipeline_runs)

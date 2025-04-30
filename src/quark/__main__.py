@@ -9,10 +9,10 @@ from pathlib import Path
 
 from quark.argument_parsing import get_args
 from quark.benchmarking import (
+    FinishedPipelineRun,
     FinishedTreeRun,
     InterruptedTreeRun,
     ModuleNode,
-    PipelineRunResult,
     PipelineRunResultEncoder,
     run_pipeline_tree,
 )
@@ -27,7 +27,7 @@ PICKLE_FILE_NAME: str = "intermediate_run_state.pkl"
 class BenchmarkingPickle:
     plugins: list[str]
     pipeline_trees: list[ModuleNode]
-    pipeline_run_results: list[PipelineRunResult]
+    finished_pipeline_runs: list[FinishedPipelineRun]
 
 
 def start() -> None:
@@ -36,7 +36,7 @@ def start() -> None:
     base_path: Path
     plugins = list[str]
     pipeline_trees: list[ModuleNode] = []
-    pipeline_run_results: list[PipelineRunResult] = []
+    already_finished_pipeline_runs: list[FinishedPipelineRun] = []
     match args.resume_dir:
         case None:  # New run
             base_path = Path("benchmark_runs").joinpath(datetime.today().strftime("%Y-%m-%d-%H-%M-%S"))  # noqa: DTZ002
@@ -58,10 +58,10 @@ def start() -> None:
             config = parse_config(args.config)
             plugins = config.plugins
             pipeline_trees = config.pipeline_trees
-        case path_str:  # Resumed run
-            base_path = Path(path_str)
-            if not base_path.is_absolute():
-                base_path = Path("benchmark_runs").joinpath(base_path)
+        case resume_dir_path:  # Resumed run
+            base_path = Path(resume_dir_path)
+            # if not base_path.is_absolute():
+            #     base_path = Path("benchmark_runs").joinpath(base_path)
             pickle_file_path = base_path.joinpath(PICKLE_FILE_NAME)
             if not pickle_file_path.is_file():
                 print("Error: No pickle file found in the specified resume_dir")  # noqa: T201
@@ -73,39 +73,42 @@ def start() -> None:
                 benchmarking_pickle: BenchmarkingPickle = pickle.load(f)  # noqa: S301
             plugins = benchmarking_pickle.plugins
             pipeline_trees = benchmarking_pickle.pipeline_trees
-            pipeline_run_results = benchmarking_pickle.pipeline_run_results
+            already_finished_pipeline_runs = benchmarking_pickle.finished_pipeline_runs
+
+    pickle_file_path = base_path.joinpath(PICKLE_FILE_NAME)
+    pipelines_path = base_path.joinpath("pipelines")
 
     loader.load_plugins(plugins)
 
     rest_trees: list[ModuleNode] = []
     for pipeline_tree in pipeline_trees:
         match run_pipeline_tree(pipeline_tree):
-            case FinishedTreeRun(results):
-                pipeline_run_results.extend(results)
-            case InterruptedTreeRun(intermediate_results, rest_tree):
-                pipeline_run_results.extend(intermediate_results)
+            case FinishedTreeRun(finished_pipeline_runs):
+                already_finished_pipeline_runs.extend(finished_pipeline_runs)
+            case InterruptedTreeRun(finished_pipeline_runs, paused_pipeline_runs, rest_tree):
+                already_finished_pipeline_runs.extend(finished_pipeline_runs)
                 rest_trees.append(rest_tree)
 
     if rest_trees:
         logging.info(
-            "Async interrupt: Some modules interrupted execution. Quark will save the current state and exit.",
+            "Some modules interrupted execution. Quark will store the current program state and exit.",
         )
-        with Path.open(base_path.joinpath(PICKLE_FILE_NAME), "wb") as f:
+        with Path.open(pickle_file_path, "wb") as f:
             pickle.dump(
                 BenchmarkingPickle(
                     plugins=plugins,
                     pipeline_trees=rest_trees,
-                    pipeline_run_results=pipeline_run_results,
+                    finished_pipeline_runs=already_finished_pipeline_runs,
                 ),
                 f,
             )
+        logging.info(f"To resume from this state, start QUARK with '--resume-dir {base_path}'")
         return
 
     logging.info(" ======================== RESULTS =========================== ")
-    pipelines_path = base_path.joinpath("pipelines")
+
     pipelines_path.mkdir()
-    for result in pipeline_run_results:
-        # dir_name = "benchmark_{i}"
+    for result in already_finished_pipeline_runs:
         dir_name = str.join("-", (step.unique_name for step in result.steps))
         dir_path = pipelines_path.joinpath(dir_name)
         dir_path.mkdir()
@@ -113,9 +116,12 @@ def start() -> None:
         json_path.write_text(json.dumps(result, cls=PipelineRunResultEncoder, indent=4))
         logging.info([step.module_info for step in result.steps])
         logging.info(f"Result: {result.result}")
-        logging.info(f"Total time: {result.total_time}")
+        logging.info(f"Total time: {sum(step.preprocess_time + step.postprocess_time for step in result.steps)}")
         logging.info(f"Metrics: {[step.additional_metrics for step in result.steps]}")
         logging.info("-" * 60)
+
+    if not args.keep_pickle:
+        pickle_file_path.unlink(missing_ok=True)
 
     logging.info(" ============================================================ ")
     logging.info(" ====================  QUARK finished!   ==================== ")
