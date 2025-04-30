@@ -4,10 +4,7 @@ pipeline1:
   &pipeline1 [
     ["tsp_graph_provider", "tsp_graph_provider": { nodes: 5, seed: 43 }],
     "tsp_qubo_mapping_dnx",
-    [
-      "simulated_annealer": { num_reads: 1 },
-      "simulated_annealer": { num_reads: 1000 },
-    ],
+    ["simulated_annealer": { num_reads: 1 }, "simulated_annealer": { num_reads: 1000 }],
   ]
 
 pipeline2: &pipeline2 ["tsp_graph_provider", "classical_tsp_solver"]
