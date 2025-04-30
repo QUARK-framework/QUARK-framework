@@ -1,4 +1,5 @@
 import argparse
+import sys
 
 
 def _config_argument_parsing(argument_group: argparse._ArgumentGroup) -> None:
@@ -16,7 +17,7 @@ def _other_argument_parsing(argument_group: argparse._ArgumentGroup) -> None:
 
 
 def get_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="QUARK: Framework for Quantum Computing Application Benchmarking")
 
     _config_argument_parsing(
         parser.add_argument_group("Mutually exclusive arguments, one is required").add_mutually_exclusive_group(
@@ -24,4 +25,4 @@ def get_args() -> argparse.Namespace:
         ),
     )
     _other_argument_parsing(parser.add_argument_group("Other arguments"))
-    return parser.parse_args()
+    return parser.parse_args(args=None if sys.argv[1:] else ["--help"])  # Print help if no arguments are provided

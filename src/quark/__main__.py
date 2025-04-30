@@ -93,6 +93,7 @@ def start() -> None:
         logging.info(
             "Some modules interrupted execution. Quark will store the current program state and exit.",
         )
+        # TODO write already finished runs to dirs
         with Path.open(pickle_file_path, "wb") as f:
             pickle.dump(
                 BenchmarkingPickle(

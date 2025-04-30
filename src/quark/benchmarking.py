@@ -207,6 +207,7 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
         assert node.preprocess_time is not None  # noqa: S101 Otherwise Pylint complains
 
         results: list[PipelineRunStatus] = []  # Will be returned later
+
         downstream_results = (
             (imp(child, preprocessed_data, depth + 1) for child in node.children)
             if node.children
@@ -248,6 +249,7 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
                                         metrics_up_to_now=[*metrics_up_to_now, module_run_metrics],
                                     ),
                                 )
+                        node.parent = None  # This node and all its descendents ran successfully and can be deleted
         return results
 
     results = imp(pipeline_tree, None, 0)
