@@ -1,3 +1,11 @@
+# ruff: noqa: ANN401
+
+"""The Core abstract base class.
+
+Each module must inherit from the Core class and implement its abstract functions. Core also provides some non-abstract
+functions which contain default implementations and can be overriden by a module, if desired.
+"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -5,6 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 
+# TODO maybe this is not the best place for the interruption types
 @dataclass(frozen=True)
 class Sleep:
     stored_data: Any
@@ -22,7 +31,7 @@ class Core(ABC):
     """Core Module interface, implemented by all other Modules that are part of a benchmark pipeline."""
 
     @abstractmethod
-    def preprocess(self, data: Any) -> Interruption | Any:  # noqa: ANN401
+    def preprocess(self, data: Any) -> Interruption | Any:
         """Essential method for the benchmarking process.
 
         This is always executed before traversing down
@@ -34,7 +43,7 @@ class Core(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def postprocess(self, data: Any) -> Interruption | Any:  # noqa: ANN401
+    def postprocess(self, data: Any) -> Interruption | Any:
         """Essential Method for the benchmarking process.
 
         Is always executed after the submodule is finished. The data by

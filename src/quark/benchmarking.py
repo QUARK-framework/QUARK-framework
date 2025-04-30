@@ -1,3 +1,7 @@
+# ruff: noqa: ANN401
+
+"""Collection of datatypes and functions used to run a benchmarking tree."""
+
 from __future__ import annotations
 
 import json
@@ -14,20 +18,37 @@ from quark.plugin_manager import factory
 from quark.quark_logging import set_logging_depth
 
 
-# === Module Datatypes ===
 @dataclass(frozen=True)
 class ModuleInfo:
+    """Encapsulates information to represent and create a module.
+
+    ModuleInfo is used in multiple other composite types.
+    Everything stored here will will be added to the results after a benchmarking run.
+    Therefore, the data is intentionally kept as concise and human-readable as possible.
+    """
+
     name: str
     params: dict[str, Any]
 
 
 @dataclass(frozen=True)
 class ModuleRunMetrics:
+    """Encapsulates information about the result of the pre and postprocessing steps of one module.
+
+    Everything stored here will will be added to the results after a benchmarking run. Therefore, the data is
+    intentionally kept as concise and human-readable as possible.
+    """
+
+    # === set by config file ===
     module_info: ModuleInfo
     preprocess_time: float
     postprocess_time: float
+    # =/= set by config file =/=
+
+    # === chosen manually by module or created automatically if nothing is given ===
     additional_metrics: dict
     unique_name: str
+    # =/= chosen manually by module or created automatically if nothing is given =/=
 
     @classmethod
     def create(
@@ -37,6 +58,8 @@ class ModuleRunMetrics:
         preprocess_time: float,
         postprocess_time: float,
     ) -> ModuleRunMetrics:
+        # TODO this docstring is not very good
+        """Create a ModuleRunMetrics object."""
         unique_name: str
         match module.get_unique_name():
             case None:
@@ -55,9 +78,6 @@ class ModuleRunMetrics:
         )
 
 
-# === Module Datatypes ===
-
-
 # === Pipeline Run Progress ===
 @dataclass(frozen=True)
 class FinishedPipelineRun:
@@ -74,17 +94,19 @@ class FinishedPipelineRun:
 
 
 @dataclass(frozen=True)
-class InProgressPipelineRun:
-    downstream_data: Any
-    metrics_up_to_now: list[ModuleRunMetrics]
+class _InProgressPipelineRun:
+    """An in-progress pipeline run that was not interrupted or paused yet, used by run_pipeline_tree.imp()."""
+
+    downstream_data: Any  # The result of a child node's postprocessing step
+    metrics_up_to_now: list[ModuleRunMetrics]  # The aggregated metrics from all modules included in this pipeline.
 
 
 @dataclass(frozen=True)
-class PausedPipelineRun:
+class _PausedPipelineRun:
     pass
 
 
-PipelineRunStatus = InProgressPipelineRun | PausedPipelineRun
+_PipelineRunStatus = _InProgressPipelineRun | _PausedPipelineRun
 # === Pipeline Run Progress ===
 
 
@@ -97,11 +119,11 @@ class FinishedTreeRun:
 @dataclass(frozen=True)
 class InterruptedTreeRun:
     finished_pipeline_runs: list[FinishedPipelineRun]
-    paused_pipeline_runs: list[PausedPipelineRun]
+    paused_pipeline_runs: list[_PausedPipelineRun]
     rest_tree: ModuleNode
 
 
-TreeRunResult = FinishedTreeRun | InterruptedTreeRun
+_TreeRunResult = FinishedTreeRun | InterruptedTreeRun
 # === Tree Results ===
 
 
@@ -137,9 +159,15 @@ class ModuleNode(NodeMixin):
     data_stored_by_preprocess_interrupt: Any | None = None
 
     interrupted_during_postprocess = False
-    data_stored_by_postprocess_interrupt: list[InProgressPipelineRun] | None = None
+    data_stored_by_postprocess_interrupt: list[_InProgressPipelineRun] | None = None
 
     def __init__(self, module_info: ModuleInfo, parent: ModuleNode | None = None) -> None:
+        """Initialize a ModuleNode.
+
+        For a newly created ModuleNode object, only the module_info attribute must be set. All other attributes will be
+        set only at the time they are needed. Together with the fact that nodes are deleted when they are no longer
+        needed, this ensures that a pipeline tree only contains necessary data at all times, saving memory.
+        """
         super().__init__()
         self.module_info = module_info
         self.parent = parent
@@ -150,6 +178,7 @@ class PipelineRunResultEncoder(json.JSONEncoder):
         if not isinstance(o, FinishedPipelineRun):
             # Let the base class default method raise the TypeError
             return super().default(o)
+        # TODO Handle error if no string representation of data is available
         d = o.__dict__.copy()
         d["steps"] = [step.__dict__ for step in o.steps]
         for step in d["steps"]:
@@ -157,7 +186,7 @@ class PipelineRunResultEncoder(json.JSONEncoder):
         return d
 
 
-def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
+def run_pipeline_tree(pipeline_tree: ModuleNode) -> _TreeRunResult:
     """Run pipelines by traversing the given pipeline tree.
 
     The pipeline tree represents one or more pipelines, where each node is a module. A node can provide its output to
@@ -172,9 +201,9 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
 
     def imp(
         node: ModuleNode,
-        upstream_data: Any,  # noqa: ANN401
+        upstream_data: Any,
         depth: int,
-    ) -> list[PipelineRunStatus]:
+    ) -> list[_PipelineRunStatus]:
         set_logging_depth(depth)
         logging.info(f"Running preprocess for module {node.module_info}")
 
@@ -193,7 +222,7 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
                 case Sleep(stored_data):
                     node.interrupted_during_preprocess = True
                     node.data_stored_by_preprocess_interrupt = stored_data
-                    return [PausedPipelineRun()]
+                    return [_PausedPipelineRun()]
                 case Backtrack(_):
                     # TODO
                     raise NotImplementedError
@@ -206,12 +235,12 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
         assert node.module is not None  # noqa: S101 Otherwise Pylint complains
         assert node.preprocess_time is not None  # noqa: S101 Otherwise Pylint complains
 
-        results: list[PipelineRunStatus] = []  # Will be returned later
+        results: list[_PipelineRunStatus] = []  # Will be returned later
 
         downstream_results = (
             (imp(child, preprocessed_data, depth + 1) for child in node.children)
             if node.children
-            else iter([[InProgressPipelineRun(downstream_data=None, metrics_up_to_now=[])]])
+            else iter([[_InProgressPipelineRun(downstream_data=None, metrics_up_to_now=[])]])
         )
         if node.data_stored_by_postprocess_interrupt is not None:
             downstream_results = chain(downstream_results, iter([node.data_stored_by_postprocess_interrupt]))
@@ -220,9 +249,9 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
             set_logging_depth(depth)
             for pipeline_run_status in downstream_result:
                 match pipeline_run_status:
-                    case PausedPipelineRun():
+                    case _PausedPipelineRun():
                         results.append(pipeline_run_status)
-                    case InProgressPipelineRun(downstream_data, metrics_up_to_now):
+                    case _InProgressPipelineRun(downstream_data, metrics_up_to_now):
                         logging.info(f"Running postprocess for module {node.module_info}")
                         t1 = perf_counter()
                         match node.module.postprocess(downstream_data):
@@ -244,7 +273,7 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
                                     postprocess_time=postprocess_time,
                                 )
                                 results.append(
-                                    InProgressPipelineRun(
+                                    _InProgressPipelineRun(
                                         downstream_data=postprocessed_data,
                                         metrics_up_to_now=[*metrics_up_to_now, module_run_metrics],
                                     ),
@@ -257,10 +286,10 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
     finished_pipeline_runs = [
         FinishedPipelineRun(result=r.downstream_data, steps=r.metrics_up_to_now)
         for r in results
-        if isinstance(r, InProgressPipelineRun)
+        if isinstance(r, _InProgressPipelineRun)
     ]
 
-    paused_pipeline_runs = [r for r in results if isinstance(r, PausedPipelineRun)]
+    paused_pipeline_runs = [r for r in results if isinstance(r, _PausedPipelineRun)]
 
     if paused_pipeline_runs:
         return InterruptedTreeRun(
