@@ -58,7 +58,8 @@ def _init_pipeline_trees(pipeline: list[PipelineLayer]) -> list[ModuleNode]:
     The function starts by creating a root node for each module in the first layer.
     For each module in the next layer, a child node is created for each of the previous nodes.
     This continues recursively until the last layer is reached.
-    # Shouldn't it be "iteratively" instead of "recursively"?
+    # Shouldn't it be "iteratively" instead of "recursively"? A: Logically, yes, this is what is happening. But the
+    # implementation works recursively
 
     :param pipeline: TODO
     :return: TODO
@@ -75,11 +76,14 @@ def _init_pipeline_trees(pipeline: list[PipelineLayer]) -> list[ModuleNode]:
                     node = ModuleNode(module_info, parent)
                     imp(pipeline[1:], parent=node)
 
-    pipeline = [layer if isinstance(layer, list) else [layer] for layer in pipeline]
+    pipeline = [layer if isinstance(layer, list) else [layer] for layer in pipeline]  # <- pipeline is converted here
     pipeline_trees = [ModuleNode(_init_module_info(layer)) for layer in pipeline[0]]
     for node in pipeline_trees:
         imp(pipeline[1:], parent=node)  # type: ignore
-    # Why "type: ignore"?
+    # Why "type: ignore"? A: Pyright is not smart enough to realize that pipeline has the required type at this point.
+    # A few lines above this, pipeline is converted from a list[PipelineLayer] to a list[list[ModuleFormat]] by the list
+    # comprehension. All of those hard-coded types are only here to make type-checking possible at all after reading
+    # an arbitrary config file, but maybe this is not the best way of doing things, according to Pyright.
     return pipeline_trees
 
 

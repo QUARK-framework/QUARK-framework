@@ -24,7 +24,7 @@ PICKLE_FILE_NAME: str = "intermediate_run_state.pkl"
 
 
 @dataclass(frozen=True)
-class BenchmarkingPickle:  # Do dataclasses require docstrings? If not -> should be ignored by ruff
+class BenchmarkingPickle:  # Do dataclasses require docstrings? If not -> should be ignored by ruff A: I would say yes
     plugins: list[str]
     pipeline_trees: list[ModuleNode]
     finished_pipeline_runs: list[FinishedPipelineRun]

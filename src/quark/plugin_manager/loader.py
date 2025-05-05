@@ -19,7 +19,10 @@ class PluginInterface(Protocol):
 
 
 def import_module(plugin_file: str) -> PluginInterface:
-    # Is it really a PluginInterface that is returned here?
+    # Is it really a PluginInterface that is returned here? A: Yes, a PluginInterface provides a register function. In
+    # python, modules can also provide functions. The reason for this type annotation is just so the type checker does
+    # not complain when register is called in line 32. It cannot enforce that the plugin is actually conforming to the
+    # interface
     return importlib.import_module(plugin_file) # pyright: ignore
 
 
