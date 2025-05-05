@@ -69,7 +69,7 @@ class Core(ABC):
     def get_unique_name(self) -> str | None:
         """Return a string representation of the module to be used in the file names for benchmark results.
 
-        The string should be human-readable, not too long, and be unique in regards to the parameters given to the
+        The string should be human-readable, not too long, and be unique in regard to the parameters given to the
         module.
         Two different instances of the same module should return different strings if they were given different
         parameters.

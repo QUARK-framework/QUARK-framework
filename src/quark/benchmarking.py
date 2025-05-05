@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass
 from itertools import chain
@@ -23,7 +22,7 @@ class ModuleInfo:
     """Encapsulates information to represent and create a module.
 
     ModuleInfo is used in multiple other composite types.
-    Everything stored here will will be added to the results after a benchmarking run.
+    Everything stored here will be added to the results after a benchmarking run.
     Therefore, the data is intentionally kept as concise and human-readable as possible.
     """
 
@@ -113,17 +112,20 @@ _PipelineRunStatus = _InProgressPipelineRun | _PausedPipelineRun
 # === Tree Results ===
 @dataclass(frozen=True)
 class FinishedTreeRun:
+    """Represents a tree run where every pipeline finished and no interruptions remain to be handled."""
+
     finished_pipeline_runs: list[FinishedPipelineRun]
 
 
 @dataclass(frozen=True)
 class InterruptedTreeRun:
-    finished_pipeline_runs: list[FinishedPipelineRun]
-    paused_pipeline_runs: list[_PausedPipelineRun]
-    rest_tree: ModuleNode
+    """Represents a tree run where one or more modules were interrupted."""
+
+    finished_pipeline_runs: list[FinishedPipelineRun]  # Metrics of finished pipeline runs
+    rest_tree: ModuleNode  # The remaining pipeline tree without nodes that are already finished
 
 
-_TreeRunResult = FinishedTreeRun | InterruptedTreeRun
+TreeRunResult = FinishedTreeRun | InterruptedTreeRun
 # === Tree Results ===
 
 
@@ -173,26 +175,16 @@ class ModuleNode(NodeMixin):
         self.parent = parent
 
 
-class PipelineRunResultEncoder(json.JSONEncoder):
-    def default(self, o: Any) -> Any:
-        if not isinstance(o, FinishedPipelineRun):
-            # Let the base class default method raise the TypeError
-            return super().default(o)
-        # TODO Handle error if no string representation of data is available
-        d = o.__dict__.copy()
-        d["steps"] = [step.__dict__ for step in o.steps]
-        for step in d["steps"]:
-            step["module_info"] = step["module_info"].__dict__
-        return d
-
-
-def run_pipeline_tree(pipeline_tree: ModuleNode) -> _TreeRunResult:
+def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
     """Run pipelines by traversing the given pipeline tree.
 
-    The pipeline tree represents one or more pipelines, where each node is a module. A node can provide its output to
-    any of its child nodes, each choice representing a distinct pipeline. The tree is traversed in a depth-first
-    manner, storing the result from each preprocess step to re-use as input for each child node. When a leaf node is
-    reached, the tree is traversed back up to the root node, running every postprocessing step along the way.
+    The pipeline tree represents one or more pipelines, where each node is a module.
+    A node can provide its output to any of its child nodes, each choice representing another permutation of pipeline
+    layers.
+    The tree is traversed in a depth-first manner, storing the result from each preprocess step to re-use as input for
+    each child node.
+    When a leaf node is reached, the tree is traversed back up to the root node, running every postprocessing step along
+    the way.
 
     :param pipeline_tree: Root nodes of a pipeline tree, representing one or more pipelines
     :return: A tuple of a list of BenchmarkRun objects, one for each leaf node, and an optional interruption that is
@@ -289,12 +281,9 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> _TreeRunResult:
         if isinstance(r, _InProgressPipelineRun)
     ]
 
-    paused_pipeline_runs = [r for r in results if isinstance(r, _PausedPipelineRun)]
-
-    if paused_pipeline_runs:
+    if any(isinstance(r, _PausedPipelineRun) for r in results):
         return InterruptedTreeRun(
             finished_pipeline_runs=finished_pipeline_runs,
-            paused_pipeline_runs=paused_pipeline_runs,
             rest_tree=pipeline_tree,
         )
     return FinishedTreeRun(finished_pipeline_runs=finished_pipeline_runs)
