@@ -24,7 +24,7 @@ PICKLE_FILE_NAME: str = "intermediate_run_state.pkl"
 
 
 @dataclass(frozen=True)
-class BenchmarkingPickle:
+class BenchmarkingPickle:  # Do dataclasses require docstrings? If not -> should be ignored by ruff
     plugins: list[str]
     pipeline_trees: list[ModuleNode]
     finished_pipeline_runs: list[FinishedPipelineRun]
@@ -60,6 +60,7 @@ def start() -> None:
             pipeline_trees = config.pipeline_trees
         case resume_dir_path:  # Resumed run
             base_path = Path(resume_dir_path)
+            # Absolute path necessary?
             # if not base_path.is_absolute():
             #     base_path = Path("benchmark_runs").joinpath(base_path)
             pickle_file_path = base_path.joinpath(PICKLE_FILE_NAME)
@@ -91,7 +92,7 @@ def start() -> None:
 
     if rest_trees:
         logging.info(
-            "Some modules interrupted execution. Quark will store the current program state and exit.",
+            "Some modules interrupted execution. QUARK will store the current program state and exit.",
         )
         # TODO write already finished runs to dirs
         with Path.open(pickle_file_path, "wb") as f:
@@ -101,9 +102,9 @@ def start() -> None:
                     pipeline_trees=rest_trees,
                     finished_pipeline_runs=already_finished_pipeline_runs,
                 ),
-                f,
+                f,  # IDE throws warning: Expected type 'SupportsWrite[bytes]', got 'BufferedWriter' instead
             )
-        logging.info(f"To resume from this state, start QUARK with '--resume-dir {base_path}'")
+        logging.info(f"To resume from this state, start QUARK with '--resume-dir {base_path}'.")
         return
 
     logging.info(" ======================== RESULTS =========================== ")

@@ -14,6 +14,7 @@ from typing import Any
 
 
 # TODO maybe this is not the best place for the interruption types
+# Think about renaming
 @dataclass(frozen=True)
 class Sleep:
     stored_data: Any
@@ -28,14 +29,13 @@ Interruption = Sleep | Backtrack
 
 
 class Core(ABC):
-    """Core Module interface, implemented by all other Modules that are part of a benchmark pipeline."""
+    """Core module interface, implemented by all other modules that are part of a benchmarking pipeline."""
 
     @abstractmethod
     def preprocess(self, data: Any) -> Interruption | Any:
         """Essential method for the benchmarking process.
 
-        This is always executed before traversing down
-        to the next module, passing the data returned by this function.
+        This is always executed before traversing down to the next module, passing the data returned by this function.
 
         :param data: Data for the module, comes from the parent module if that exists
         :return: The processed data or an Interruption enum
@@ -44,10 +44,9 @@ class Core(ABC):
 
     @abstractmethod
     def postprocess(self, data: Any) -> Interruption | Any:
-        """Essential Method for the benchmarking process.
+        """Essential method for the benchmarking process.
 
-        Is always executed after the submodule is finished. The data by
-        this method is passed up to the parent module.
+        Is always executed after the submodule is finished. The data by this method is passed up to the parent module.
 
         :param data: Input data comes from the submodule if that exists
         :return: The processed data or an Interruption enum
@@ -69,7 +68,7 @@ class Core(ABC):
     def get_unique_name(self) -> str | None:
         """Return a string representation of the module to be used in the file names for benchmark results.
 
-        The string should be human-readable, not too long, and be unique in regards to the parameters given to the
+        The string should be human-readable, not too long, and be unique in regard to the parameters given to the
         module.
         Two different instances of the same module should return different strings if they were given different
         parameters.

@@ -23,7 +23,7 @@ class ModuleInfo:
     """Encapsulates information to represent and create a module.
 
     ModuleInfo is used in multiple other composite types.
-    Everything stored here will will be added to the results after a benchmarking run.
+    Everything stored here will be added to the results after a benchmarking run.
     Therefore, the data is intentionally kept as concise and human-readable as possible.
     """
 
@@ -35,8 +35,8 @@ class ModuleInfo:
 class ModuleRunMetrics:
     """Encapsulates information about the result of the pre and postprocessing steps of one module.
 
-    Everything stored here will will be added to the results after a benchmarking run. Therefore, the data is
-    intentionally kept as concise and human-readable as possible.
+    Everything stored here will be added to the results after a benchmarking run.
+    Therefore, the data is intentionally kept as concise and human-readable as possible.
     """
 
     # === set by config file ===
@@ -84,7 +84,7 @@ class FinishedPipelineRun:
     """The result of running one benchmarking pipeline.
 
     Captures the results of one pipeline run, consisting of the result of the last postprocessing step, total time
-    spent in all pre and postprocessing steps combined, and a list of module run metrics for each of the executed
+    spent in all pre- and postprocessing steps combined, and a list of module run metrics for each of the executed
     modules. This is different from a tree run in that it only represents the result of running one pipeline, while a
     tree run represents one or more pipeline runs.
     """
@@ -143,7 +143,7 @@ class ModuleNode(NodeMixin):
     """A module node in the pipeline tree.
 
     The module will provide the output of its preprocess step to every child node. Every child module will later
-    provide their postprocess output back to this node. When first created, a module node only stores its module
+    provide its postprocess output back to this node. When first created, a module node only stores its module
     information and its parent node. The module itself is only crated shortly before it is used. The preprocess time
     is stored after the preprocess step is run.
     """
@@ -174,7 +174,10 @@ class ModuleNode(NodeMixin):
 
 
 class PipelineRunResultEncoder(json.JSONEncoder):
+    """Custom JSON encoder for PipelineRunResult objects."""
+
     def default(self, o: Any) -> Any:
+        """Convert a PipelineRunResult object to a JSON-serializable dictionary."""
         if not isinstance(o, FinishedPipelineRun):
             # Let the base class default method raise the TypeError
             return super().default(o)
@@ -189,14 +192,18 @@ class PipelineRunResultEncoder(json.JSONEncoder):
 def run_pipeline_tree(pipeline_tree: ModuleNode) -> _TreeRunResult:
     """Run pipelines by traversing the given pipeline tree.
 
-    The pipeline tree represents one or more pipelines, where each node is a module. A node can provide its output to
-    any of its child nodes, each choice representing a distinct pipeline. The tree is traversed in a depth-first
-    manner, storing the result from each preprocess step to re-use as input for each child node. When a leaf node is
-    reached, the tree is traversed back up to the root node, running every postprocessing step along the way.
+    The pipeline tree represents one or more pipelines, where each node is a module. A node provides its output to
+    any of its child nodes (if there are any). Each child node represents a distinct pipeline. The tree is traversed in
+    a depth-first manner, storing the result from each preprocess step to re-use as input for each child node. When a
+    leaf node is reached, the tree is traversed back up to the root node, running every postprocessing step along the
+    way.
+    # Is the tree really traversed back up to the root node? Should it not be the node at which said leaf node's
+    pipeline split?
 
     :param pipeline_tree: Root nodes of a pipeline tree, representing one or more pipelines
     :return: A tuple of a list of BenchmarkRun objects, one for each leaf node, and an optional interruption that is
     set if an interruption happened
+    # First time I see :param and :return in this code base -> Should be used consistently
     """
 
     def imp(
@@ -232,6 +239,7 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> _TreeRunResult:
                     node.preprocess_finished = True
                     node.preprocessed_data = preprocessed_data
 
+        # Clearer description why noqas are used here.
         assert node.module is not None  # noqa: S101 Otherwise Pylint complains
         assert node.preprocess_time is not None  # noqa: S101 Otherwise Pylint complains
 

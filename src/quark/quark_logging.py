@@ -12,5 +12,6 @@ def set_logger(path: str) -> None:
 
 
 def set_logging_depth(depth: int) -> None:
+    """Set up indents according to benchmarking level."""
     for handler in logging.getLogger().handlers:
         handler.setFormatter(logging.Formatter(f"%(asctime)s [%(levelname)s] {' ' * 4 * depth}%(message)s", None, "%"))
