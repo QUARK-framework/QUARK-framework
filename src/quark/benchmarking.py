@@ -175,23 +175,7 @@ class ModuleNode(NodeMixin):
         self.parent = parent
 
 
-class PipelineRunResultEncoder(json.JSONEncoder):
-    """Custom JSON encoder for PipelineRunResult objects."""
-
-    def default(self, o: Any) -> Any:
-        """Convert a PipelineRunResult object to a JSON-serializable dictionary."""
-        if not isinstance(o, FinishedPipelineRun):
-            # Let the base class default method raise the TypeError
-            return super().default(o)
-        # TODO Handle error if no string representation of data is available
-        d = o.__dict__.copy()
-        d["steps"] = [step.__dict__ for step in o.steps]
-        for step in d["steps"]:
-            step["module_info"] = step["module_info"].__dict__
-        return d
-
-
-def run_pipeline_tree(pipeline_tree: ModuleNode) -> _TreeRunResult:
+def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
     """Run pipelines by traversing the given pipeline tree.
 
     The pipeline tree represents one or more pipelines, where each node is a module. A node provides its output to
