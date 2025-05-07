@@ -193,17 +193,10 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> _TreeRunResult:
     """Run pipelines by traversing the given pipeline tree.
 
     The pipeline tree represents one or more pipelines, where each node is a module. A node provides its output to
-    any of its child nodes (if there are any). Each child node represents a distinct pipeline. The tree is traversed in
-    a depth-first manner, storing the result from each preprocess step to re-use as input for each child node. When a
-    leaf node is reached, the tree is traversed back up to the root node, running every postprocessing step along the
-    way.
-    # Is the tree really traversed back up to the root node? Should it not be the node at which said leaf node's
-    pipeline split?
-
-    :param pipeline_tree: Root nodes of a pipeline tree, representing one or more pipelines
-    :return: A tuple of a list of BenchmarkRun objects, one for each leaf node, and an optional interruption that is
-    set if an interruption happened
-    # First time I see :param and :return in this code base -> Should be used consistently
+    any of its child nodes (if there are any). Each child node represents a distinct pipeline. The tree is traversed
+    recursively in a depth-first manner, storing the result from each preprocess step to re-use as input for each child
+    node. The return value of recursively calling a child node includes all metrics from all pipeline runs represented
+    by the subtree starting at that child.
     """
 
     def imp(
@@ -239,10 +232,6 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> _TreeRunResult:
                     node.preprocess_finished = True
                     node.preprocessed_data = preprocessed_data
 
-        # Clearer description why noqas are used here.
-        assert node.module is not None  # noqa: S101 Otherwise Pylint complains
-        assert node.preprocess_time is not None  # noqa: S101 Otherwise Pylint complains
-
         results: list[_PipelineRunStatus] = []  # Will be returned later
 
         downstream_results = (
@@ -277,7 +266,7 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> _TreeRunResult:
                                 module_run_metrics = ModuleRunMetrics.create(
                                     module_info=node.module_info,
                                     module=node.module,
-                                    preprocess_time=node.preprocess_time,
+                                    preprocess_time=node.preprocess_time,  # type: ignore
                                     postprocess_time=postprocess_time,
                                 )
                                 results.append(

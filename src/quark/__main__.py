@@ -60,9 +60,6 @@ def start() -> None:
             pipeline_trees = config.pipeline_trees
         case resume_dir_path:  # Resumed run
             base_path = Path(resume_dir_path)
-            # Absolute path necessary?
-            # if not base_path.is_absolute():
-            #     base_path = Path("benchmark_runs").joinpath(base_path)
             pickle_file_path = base_path.joinpath(PICKLE_FILE_NAME)
             if not pickle_file_path.is_file():
                 print("Error: No pickle file found in the specified resume_dir")  # noqa: T201

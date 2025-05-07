@@ -49,7 +49,10 @@ def _init_module_info(module: ModuleFormat) -> ModuleInfo:
             name = next(iter(module))
             params = module[name]
             return ModuleInfo(name=name, params=params)
-    # Should an error be thrown here if the required ModuleFormat is not met? Or is that done somewhere else?
+        case _:
+            msg = "The config file is not in the correct format"
+            raise TypeError(msg)
+
 
 def _init_pipeline_trees(pipeline: list[PipelineLayer]) -> list[ModuleNode]:
     """Create pipeline trees from lists of data adhering to PipelineLayer.
@@ -65,6 +68,7 @@ def _init_pipeline_trees(pipeline: list[PipelineLayer]) -> list[ModuleNode]:
     :return: TODO
     """
 
+    # TODO rewrite to simple for loop
     def imp(pipeline: list[list[ModuleFormat]], parent: ModuleNode) -> None:
         match pipeline:
             case []:
@@ -90,7 +94,7 @@ def _init_pipeline_trees(pipeline: list[PipelineLayer]) -> list[ModuleNode]:
 def parse_config(path: str) -> Config:
     """Parse the config to sync formatting."""
     with Path(path).open() as file:
-        data = yaml.load(file, Loader=yaml.FullLoader) # noqa: S506
+        data = yaml.load(file, Loader=yaml.FullLoader)  # noqa: S506
         pipeline_layers_lists: list[list[PipelineLayer]] = []
         if "pipelines" in data:
             pipeline_layers_lists = data["pipelines"]
@@ -101,6 +105,9 @@ def parse_config(path: str) -> Config:
             raise ValueError(message)
 
         # TODO more documentation for this line in particular or rewrite into more clear syntax with for loop or such
-        pipeline_trees = functools.reduce(operator.iadd, (_init_pipeline_trees(pipeline_layers) for pipeline_layers in
-                                                          pipeline_layers_lists), [])
+        pipeline_trees = functools.reduce(
+            operator.iadd,
+            (_init_pipeline_trees(pipeline_layers) for pipeline_layers in pipeline_layers_lists),
+            [],
+        )
         return Config(plugins=data["plugins"], pipeline_trees=pipeline_trees)
