@@ -18,8 +18,7 @@ authors = [
     { name = "Andre Luckow", email = "andre.luckow@bmwgroup.com" },
     { name = "Greshma Shaji", email = "greshma.shaji@bmwgroup.com" },
     { name = "Florian Kiwit", email = "florian.kiwit@bmw.de" },
-    { name = "Benjamin Decker", email = "benjamin.decker@bmw.de" },
-    # Are there authors for each plug-in?
+    { name = "Benjamin Decker", email = "benjamin.decker@bmw.de" }
 ]
 description = "Framework for Quantum Computing Application Benchmarking"
 readme = "README.md"
