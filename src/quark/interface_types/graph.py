@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import networkx as nx
+import networkx as nx  # Should that be part of pyproject.toml? A: Yes, as soon as we start using it
 import numpy as np
 
 
 @dataclass
 class Graph:
+    """A class for representing a graph problem."""
+
     _g: nx.Graph
 
     @staticmethod

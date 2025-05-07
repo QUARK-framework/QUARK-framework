@@ -75,8 +75,6 @@ def start() -> None:
             pipeline_trees = config.pipeline_trees
         case resume_dir_path:  # Resumed run
             base_path = Path(resume_dir_path)
-            # if not base_path.is_absolute():
-            #     base_path = Path("benchmark_runs").joinpath(base_path)
             pickle_file_path = base_path.joinpath(PICKLE_FILE_NAME)
             if not pickle_file_path.is_file():
                 print("Error: No pickle file found in the specified resume_dir")  # noqa: T201
@@ -106,7 +104,7 @@ def start() -> None:
 
     if rest_trees:
         logging.info(
-            "Some modules interrupted execution. Quark will store the current program state and exit.",
+            "Some modules interrupted execution. QUARK will store the current program state and exit.",
         )
         # TODO write already finished runs to dirs
         with Path.open(pickle_file_path, "wb") as f:
@@ -116,9 +114,9 @@ def start() -> None:
                     pipeline_trees=rest_trees,
                     finished_pipeline_runs=already_finished_pipeline_runs,
                 ),
-                f,
+                f,  # IDE throws warning: Expected type 'SupportsWrite[bytes]', got 'BufferedWriter' instead
             )
-        logging.info(f"To resume from this state, start QUARK with '--resume-dir {base_path}'")
+        logging.info(f"To resume from this state, start QUARK with '--resume-dir {base_path}'.")
         return
 
     logging.info(" ======================== RESULTS =========================== ")

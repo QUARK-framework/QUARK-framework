@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Qubo:
-    """A class for representing a Quadratic Unconstrained Binary Optimization problem."""
+    """A class for representing a quadratic unconstrained binary optimization (QUBO) problem."""
 
     # Every entry represents a coefficient of the qubo matrix
     _q: dict

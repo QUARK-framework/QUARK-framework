@@ -6,8 +6,8 @@ build-backend = "hatchling.build"
 packages = ["src/quark"]
 
 [project.urls]
-Homepage = "https://github.com/QUARK-framework/QUARK"
-Issues = "https://github.com/QUARK-framework/QUARK/issues"
+Homepage = "https://github.com/QUARK-framework/QUARK-framework"
+Issues = "https://github.com/QUARK-framework/QUARK-framework/issues"
 
 [project]
 name = "QUARK-framework"
@@ -18,7 +18,7 @@ authors = [
     { name = "Andre Luckow", email = "andre.luckow@bmwgroup.com" },
     { name = "Greshma Shaji", email = "greshma.shaji@bmwgroup.com" },
     { name = "Florian Kiwit", email = "florian.kiwit@bmw.de" },
-    { name = "Benjamin Decker", email = "benjamin.decker@bmw.de" },
+    { name = "Benjamin Decker", email = "benjamin.decker@bmw.de" }
 ]
 description = "Framework for Quantum Computing Application Benchmarking"
 readme = "README.md"

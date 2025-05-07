@@ -37,12 +37,11 @@ PipelineLayer = ModuleFormat | list[ModuleFormat]
 def _init_module_info(module: ModuleFormat) -> ModuleInfo:
     """Create a ModuleInfo object from data adhering to ModuleFormat.
 
-    This function belongs here instead of inside the ModuleInfo class definition because ModuleFormat is only used for
-    parsing the config, not outside.
-
     :param module: Data adhering to ModuleFormat
     :return: An instance of ModuleInfo containing the given data
     """
+    # This function belongs here instead of inside the ModuleInfo class definition because ModuleFormat is only used for
+    # parsing the config.
     match module:
         case str():  # Single module
             return ModuleInfo(name=module, params={})
@@ -50,6 +49,9 @@ def _init_module_info(module: ModuleFormat) -> ModuleInfo:
             name = next(iter(module))
             params = module[name]
             return ModuleInfo(name=name, params=params)
+        case _:
+            msg = "The config file is not in the correct format"
+            raise TypeError(msg)
 
 
 def _init_pipeline_trees(pipeline: list[PipelineLayer]) -> list[ModuleNode]:
@@ -59,11 +61,14 @@ def _init_pipeline_trees(pipeline: list[PipelineLayer]) -> list[ModuleNode]:
     The function starts by creating a root node for each module in the first layer.
     For each module in the next layer, a child node is created for each of the previous nodes.
     This continues recursively until the last layer is reached.
+    # Shouldn't it be "iteratively" instead of "recursively"? A: Logically, yes, this is what is happening. But the
+    # implementation works recursively
 
     :param pipeline: TODO
     :return: TODO
     """
 
+    # TODO rewrite to simple for loop
     def imp(pipeline: list[list[ModuleFormat]], parent: ModuleNode) -> None:
         match pipeline:
             case []:
@@ -75,16 +80,21 @@ def _init_pipeline_trees(pipeline: list[PipelineLayer]) -> list[ModuleNode]:
                     node = ModuleNode(module_info, parent)
                     imp(pipeline[1:], parent=node)
 
-    pipeline = [layer if isinstance(layer, list) else [layer] for layer in pipeline]
+    pipeline = [layer if isinstance(layer, list) else [layer] for layer in pipeline]  # <- pipeline is converted here
     pipeline_trees = [ModuleNode(_init_module_info(layer)) for layer in pipeline[0]]
     for node in pipeline_trees:
         imp(pipeline[1:], parent=node)  # type: ignore
+    # Why "type: ignore"? A: Pyright is not smart enough to realize that pipeline has the required type at this point.
+    # A few lines above this, pipeline is converted from a list[PipelineLayer] to a list[list[ModuleFormat]] by the list
+    # comprehension. All of those hard-coded types are only here to make type-checking possible at all after reading
+    # an arbitrary config file, but maybe this is not the best way of doing things, according to Pyright.
     return pipeline_trees
 
 
 def parse_config(path: str) -> Config:
+    """Parse the config to sync formatting."""
     with Path(path).open() as file:
-        data = yaml.load(file, Loader=yaml.FullLoader) # noqa: S506
+        data = yaml.load(file, Loader=yaml.FullLoader)  # noqa: S506
         pipeline_layers_lists: list[list[PipelineLayer]] = []
         if "pipelines" in data:
             pipeline_layers_lists = data["pipelines"]
@@ -95,5 +105,9 @@ def parse_config(path: str) -> Config:
             raise ValueError(message)
 
         # TODO more documentation for this line in particular or rewrite into more clear syntax with for loop or such
-        pipeline_trees = functools.reduce(operator.iadd, (_init_pipeline_trees(pipeline_layers) for pipeline_layers in pipeline_layers_lists), [])
+        pipeline_trees = functools.reduce(
+            operator.iadd,
+            (_init_pipeline_trees(pipeline_layers) for pipeline_layers in pipeline_layers_lists),
+            [],
+        )
         return Config(plugins=data["plugins"], pipeline_trees=pipeline_trees)
