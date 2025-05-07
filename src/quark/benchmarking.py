@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass
 from itertools import chain
@@ -113,17 +112,20 @@ _PipelineRunStatus = _InProgressPipelineRun | _PausedPipelineRun
 # === Tree Results ===
 @dataclass(frozen=True)
 class FinishedTreeRun:
+    """Represents a tree run where every pipeline finished and no interruptions remain to be handled."""
+
     finished_pipeline_runs: list[FinishedPipelineRun]
 
 
 @dataclass(frozen=True)
 class InterruptedTreeRun:
-    finished_pipeline_runs: list[FinishedPipelineRun]
-    paused_pipeline_runs: list[_PausedPipelineRun]
-    rest_tree: ModuleNode
+    """Represents a tree run where one or more modules were interrupted."""
+
+    finished_pipeline_runs: list[FinishedPipelineRun]  # Metrics of finished pipeline runs
+    rest_tree: ModuleNode  # The remaining pipeline tree without nodes that are already finished
 
 
-_TreeRunResult = FinishedTreeRun | InterruptedTreeRun
+TreeRunResult = FinishedTreeRun | InterruptedTreeRun
 # === Tree Results ===
 
 
@@ -286,12 +288,9 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> _TreeRunResult:
         if isinstance(r, _InProgressPipelineRun)
     ]
 
-    paused_pipeline_runs = [r for r in results if isinstance(r, _PausedPipelineRun)]
-
-    if paused_pipeline_runs:
+    if any(isinstance(r, _PausedPipelineRun) for r in results):
         return InterruptedTreeRun(
             finished_pipeline_runs=finished_pipeline_runs,
-            paused_pipeline_runs=paused_pipeline_runs,
             rest_tree=pipeline_tree,
         )
     return FinishedTreeRun(finished_pipeline_runs=finished_pipeline_runs)

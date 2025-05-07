@@ -6,6 +6,7 @@ import pickle
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from quark.argument_parsing import get_args
 from quark.benchmarking import (
@@ -13,7 +14,6 @@ from quark.benchmarking import (
     FinishedTreeRun,
     InterruptedTreeRun,
     ModuleNode,
-    PipelineRunResultEncoder,
     run_pipeline_tree,
 )
 from quark.config_parsing import parse_config
@@ -24,10 +24,25 @@ PICKLE_FILE_NAME: str = "intermediate_run_state.pkl"
 
 
 @dataclass(frozen=True)
-class BenchmarkingPickle:  # Do dataclasses require docstrings? If not -> should be ignored by ruff A: I would say yes
+class BenchmarkingPickle:
+    """Encapsulates all data needed when the program state is stored as a pickle file."""
+
     plugins: list[str]
     pipeline_trees: list[ModuleNode]
     finished_pipeline_runs: list[FinishedPipelineRun]
+
+
+class PipelineRunResultEncoder(json.JSONEncoder):
+    def default(self, o: Any) -> Any:  # noqa: ANN401
+        if not isinstance(o, FinishedPipelineRun):
+            # Let the base class default method raise the TypeError
+            return super().default(o)
+        # TODO Handle error if no string representation of data is available
+        d = o.__dict__.copy()
+        d["steps"] = [step.__dict__ for step in o.steps]
+        for step in d["steps"]:
+            step["module_info"] = step["module_info"].__dict__
+        return d
 
 
 def start() -> None:
@@ -83,7 +98,7 @@ def start() -> None:
         match run_pipeline_tree(pipeline_tree):
             case FinishedTreeRun(finished_pipeline_runs):
                 already_finished_pipeline_runs.extend(finished_pipeline_runs)
-            case InterruptedTreeRun(finished_pipeline_runs, paused_pipeline_runs, rest_tree):
+            case InterruptedTreeRun(finished_pipeline_runs, rest_tree):
                 already_finished_pipeline_runs.extend(finished_pipeline_runs)
                 rest_trees.append(rest_tree)
 
