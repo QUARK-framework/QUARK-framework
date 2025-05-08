@@ -186,6 +186,7 @@ The second parameter is a callable that returns an instance of the respective mo
 
 A valid QUARK module must implement the `preprocess` and `postprocess` functions, which are abstract functions specified in `quark.core.CORE`.
 
+`example_module.py`
 ```python
 from dataclasses import dataclass
 from typing import override, Any
