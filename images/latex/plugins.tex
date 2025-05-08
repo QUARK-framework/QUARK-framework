@@ -1,0 +1,28 @@
+
+
+
+\documentclass[crop,tikz,convert={outext=.svg,command=\unexpanded{pdf2svg \infile\space\outfile}},multi=false]{standalone}[2012/04/13]
+% \usepackage{tikz-uml}
+\usetikzlibrary{calc}
+% \usepackage[T1]{fontenc}
+% \usepackage{tgschola}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\makeatletter
+\begin{document}
+\newlength{\radius}
+  \setlength{\radius}{0,8cm}
+  \tikzset{plugin/.style={fill=white, draw, thick, rectangle, rounded corners, minimum width=4*\radius, minimum height=1.5*\radius}}%
+  \begin{tikzpicture}
+    \node[plugin, ultra thick] (QUARK_framework) {\textbf{QUARK-framework}};
+    \node[plugin] (QUARK_plugin_1) at (-4.5*\radius, -3) {QUARK-plugin-1};
+    \node[plugin] (QUARK_plugin_2) at (4.5*\radius, -3) {QUARK-plugin-N};
+    \node (dots) at (0,-3) {\textbf{. . .}};
+
+    \draw[-, thick] (QUARK_framework) to  (QUARK_plugin_1);
+
+    \draw[-, thick] (QUARK_framework) to  (QUARK_plugin_2);
+
+    % \draw[-, thick] (QUARK_framework) to ($(dots) + (0,0.75)$);
+\end{tikzpicture}
+\end{document}

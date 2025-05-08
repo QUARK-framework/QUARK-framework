@@ -1,0 +1,29 @@
+\documentclass[crop,tikz,convert={outext=.svg,command=\unexpanded{pdf2svg \infile\space\outfile}},multi=false]{standalone}[2012/04/13]
+\usetikzlibrary{calc}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\makeatletter
+\begin{document}
+\newlength{\radius}
+  \setlength{\radius}{0,8cm}
+  \tikzset{tensor/.style={fill=white, draw, circle, minimum size=2*\radius}}%
+\tikzset{pipelineModule/.style={fill=white, draw, ultra thick, rectangle, rounded corners, minimum width=4*\radius, minimum height=1.5*\radius}}%
+
+\begin{tikzpicture}
+  \node[pipelineModule] (TSPGraph) {Module 1};
+  \node[pipelineModule] (QUBOMapping) at (4.5*\radius, 0) {Module 2};
+  \node[pipelineModule] (SimulatedAnnealer) at (9*\radius, 0) {Module 3};
+
+  \draw[->, ultra thick] ($(TSPGraph) + (40:1.5*\radius)$) to [out=40,in=140] node[above] {\textbf{\color{violet}1} preprocess} ($(QUBOMapping) + (140:1.5*\radius)$);
+
+  \draw[->, ultra thick] ($(QUBOMapping) + (40:1.5*\radius)$) to [out=40,in=140] node[above] {\textbf{\color{violet}2} preprocess} ($(SimulatedAnnealer) + (140:1.5*\radius)$);
+
+  \draw[->, ultra thick] ($(SimulatedAnnealer) + (40:1.5*\radius)$) to [out=40,in=10, looseness=2] node[above=3mm] {\textbf{\color{violet}3} preprocess} ($(SimulatedAnnealer) + (10:2.25*\radius)$);
+
+  \draw[->, ultra thick] ($(SimulatedAnnealer) + (-10:2.25*\radius)$) to [out=-10,in=-40, looseness=2] node[below=3mm] {\textbf{\color{violet}4} postprocess} ($(SimulatedAnnealer) + (-40:1.5*\radius)$);
+
+  \draw[->, ultra thick] ($(SimulatedAnnealer) + (220:1.5*\radius)$) to [out=220,in=320] node[below] {\textbf{\color{violet}5} postprocess} ($(QUBOMapping) + (320:1.5*\radius)$);
+
+  \draw[->, ultra thick] ($(QUBOMapping) + (220:1.5*\radius)$) to [out=220,in=320] node[below] {\textbf{\color{violet}6} postprocess} ($(TSPGraph) + (320:1.5*\radius)$);
+\end{tikzpicture}
+\end{document}

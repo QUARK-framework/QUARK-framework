@@ -10,7 +10,7 @@ Each module is given data from its upstream module, performs some preprocessing 
 After the data was passed through the pipeline it is passed back up, triggering a postprocessing step in each module passed.
 
 <div align="center">
-    <img align="center" src="images/pipeline.svg"/>
+    <img align="center" src="images/pipeline1.svg"/>
 </div>
 
 QUARK-framework does not provide any module, but can be extended by any number of plugins, each providing one or more modules.
