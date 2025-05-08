@@ -75,16 +75,18 @@ Each `pipeline` specification can still use the layered format introduced in [Pi
 ```yaml
 plugins: ["plugin_1", "plugin_2"]
 
-pipeline_1: &pipeline_1 [
+pipeline1: &pipeline1 [
     ["module_1a", "module_1b"],
     "module_2",
     "module_3",
 ]
 
-pipeline_2: &pipeline_2 [
+pipeline2: &pipeline2 [
     ["module_1a", "module_1b"],
     "module_4",
 ]
+
+pipelines: [*pipeline1, *pipeline2]
 ```
 This config file would result in a total of $2\cdot1\cdot1+2\cdot1=4$ pipelines to be executed.
 
@@ -104,9 +106,9 @@ plugins: ["quark_plugin_tsp", "quark_plugin_devices_dwave"]
 
 first_layer:
   &first_layer [
-    "tsp_graph_provider": { nodes: 4, seed: 43 },
-    "tsp_graph_provider": { nodes: 5, seed: 43 },
-    "tsp_graph_provider": { nodes: 6, seed: 43 },
+    "tsp_graph_provider": { nodes: 4, seed: 42 },
+    "tsp_graph_provider": { nodes: 5, seed: 42 },
+    "tsp_graph_provider": { nodes: 6, seed: 42 },
   ]
 
 second_layer: &second_layer "tsp_qubo_mapping_dnx"
@@ -130,8 +132,7 @@ pipeline2: &pipeline2 [
 pipelines: [*pipeline1, *pipeline2]
 ```
 
-This example uses the two plugins `quark-plugin-tsp` and `quark-plugin-devices-dwave`.
-Both are included in the QUARK plugin ecosystem and available as pip packages.
+This example uses the two plugins `quark-plugin-tsp` and `quark-plugin-devices-dwave`, both available as pip packages.
 To run this config file, install all necessary dependencies and run QUARK-framework, passing the path to this config file:
 ```properties
 pip install quark-framework quark-plugin-tsp quark-plugin-devices-dwave
