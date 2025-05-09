@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-import networkx as nx  # Should that be part of pyproject.toml? A: Yes, as soon as we start using it
-import numpy as np
+if TYPE_CHECKING:
+    import networkx as nx
+    import numpy as np
 
 
-@dataclass
 class Graph:
     """A class for representing a graph problem."""
 
@@ -14,17 +14,16 @@ class Graph:
 
     @staticmethod
     def from_nx_graph(g: nx.Graph) -> Graph:
-        return Graph(g)
+        v = Graph()
+        v._g = g
+        return v
 
-    def as_nx_graph(self):
+    def as_nx_graph(self) -> nx.Graph:
         return self._g
 
     @staticmethod
     def from_adjacency_matrix(matrix: np.ndarray) -> Graph:
-        g = nx.Graph()
-        # TODO
-        return Graph(g)
+        raise NotImplementedError
 
-    @staticmethod
-    def postprocessed_type():
-        return list[int]
+    def as_adjacency_matrix(self) -> np.ndarray:
+        raise NotImplementedError

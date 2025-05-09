@@ -39,6 +39,7 @@ class PipelineRunResultEncoder(json.JSONEncoder):
             return super().default(o)
         # TODO Handle error if no string representation of data is available
         d = o.__dict__.copy()
+        del d["result"]
         d["steps"] = [step.__dict__ for step in o.steps]
         for step in d["steps"]:
             step["module_info"] = step["module_info"].__dict__

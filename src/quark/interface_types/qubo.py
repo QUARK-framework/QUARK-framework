@@ -1,21 +1,20 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 
-
-@dataclass(frozen=True)
 class Qubo:
     """A class for representing a quadratic unconstrained binary optimization (QUBO) problem."""
 
     # Every entry represents a coefficient of the qubo matrix
     _q: dict
 
-    def as_dict(self):
+    def as_dict(self) -> dict:
         return self._q
 
     @staticmethod
     def from_dict(q: dict) -> Qubo:
-        return Qubo(q)
+        v = Qubo()
+        v._q = q
+        return v
 
     # def as_matrix(self):
     #     pass

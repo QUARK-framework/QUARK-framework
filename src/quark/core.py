@@ -10,29 +10,35 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from quark.interface_types import InterfaceType
 
 
-# TODO maybe this is not the best place for the interruption types
-# Think about renaming
 @dataclass(frozen=True)
 class Sleep:
-    stored_data: Any
+    stored_data: InterfaceType
 
 
 @dataclass(frozen=True)
 class Backtrack:
-    data: Any
+    data: InterfaceType
 
 
-Interruption = Sleep | Backtrack
+@dataclass(frozen=True)
+class Data:
+    data: InterfaceType
+
+
+Result = Sleep | Backtrack | Data
 
 
 class Core(ABC):
     """Core module interface, implemented by all other modules that are part of a benchmarking pipeline."""
 
     @abstractmethod
-    def preprocess(self, data: Any) -> Interruption | Any:
+    def preprocess(self, data: Any) -> Result:
         """Essential method for the benchmarking process.
 
         This is always executed before traversing down to the next module, passing the data returned by this function.
@@ -43,7 +49,7 @@ class Core(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def postprocess(self, data: Any) -> Interruption | Any:
+    def postprocess(self, data: Any) -> Result:
         """Essential method for the benchmarking process.
 
         Is always executed after the submodule is finished. The data by this method is passed up to the parent module.

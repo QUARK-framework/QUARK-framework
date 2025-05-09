@@ -8,13 +8,16 @@ import logging
 from dataclasses import dataclass
 from itertools import chain
 from time import perf_counter
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from anytree import NodeMixin
 
-from quark.core import Backtrack, Core, Sleep
+from quark.core import Backtrack, Core, Data, Sleep
 from quark.plugin_manager import factory
 from quark.quark_logging import set_logging_depth
+
+if TYPE_CHECKING:
+    from quark.interface_types import InterfaceType
 
 
 @dataclass(frozen=True)
@@ -88,7 +91,7 @@ class FinishedPipelineRun:
     tree run represents one or more pipeline runs.
     """
 
-    result: Any
+    result: InterfaceType
     steps: list[ModuleRunMetrics]
 
 
@@ -127,17 +130,6 @@ class InterruptedTreeRun:
 
 TreeRunResult = FinishedTreeRun | InterruptedTreeRun
 # === Tree Results ===
-
-
-# @dataclass(frozen=True)
-# class PreprocessResult:
-#     time: float
-#     data: Any
-
-# @dataclass(frozen=True)
-# class PostprocessResult:
-#     time: float
-#     data: Any
 
 
 @dataclass
@@ -212,11 +204,14 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
                 case Backtrack(_):
                     # TODO
                     raise NotImplementedError
-                case preprocessed_data:
+                case Data(preprocessed_data):
                     node.preprocess_time = perf_counter() - t1
                     logging.info(f"Preprocess for module {node.module_info} took {node.preprocess_time} seconds")
                     node.preprocess_finished = True
                     node.preprocessed_data = preprocessed_data
+                case _:
+                    msg = "The preprocessing function must return a Result type"
+                    raise TypeError(msg)
 
         results: list[_PipelineRunStatus] = []  # Will be returned later
 
@@ -244,7 +239,7 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
                             case Backtrack():
                                 # TODO
                                 raise NotImplementedError
-                            case postprocessed_data:
+                            case Data(postprocessed_data):
                                 postprocess_time = perf_counter() - t1
                                 logging.info(
                                     f"Postprocess for module {node.module_info} took {postprocess_time} seconds",
@@ -261,6 +256,10 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
                                         metrics_up_to_now=[*metrics_up_to_now, module_run_metrics],
                                     ),
                                 )
+                            case _:
+                                msg = "The postprocessing function must return a Result type"
+                                raise TypeError(msg)
+
                         node.parent = None  # This node and all its descendents ran successfully and can be deleted
         return results
 
