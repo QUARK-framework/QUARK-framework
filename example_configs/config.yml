@@ -2,14 +2,14 @@ plugins: ["quark_plugin_tsp", "quark_plugin_devices_dwave"]
 
 first_layer:
   &first_layer [
-    "tsp_graph_provider": { nodes: 4, seed: 43 },
-    "tsp_graph_provider": { nodes: 5, seed: 43 },
-    "tsp_graph_provider": { nodes: 6, seed: 43 },
+    "tsp_graph_provider": { nodes: 4, seed: 42 },
+    "tsp_graph_provider": { nodes: 5, seed: 42 },
+    "tsp_graph_provider": { nodes: 6, seed: 42 },
   ]
 
 second_layer: &second_layer "tsp_qubo_mapping_dnx"
 
-third_layer: &third_layer ["simulated_annealer", "simulated_annealer": {num_reads: 1000}]
+third_layer: &third_layer ["simulated_annealer", "simulated_annealer": { num_reads: 1000 }]
 
 pipeline1: &pipeline1 [*first_layer, *second_layer, *third_layer]
 
