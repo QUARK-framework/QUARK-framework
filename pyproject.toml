@@ -29,7 +29,7 @@ classifiers = [
 ]
 license = "Apache-2.0"
 dependencies = [
-    "anytree>=2.12.1",
+    "anytree>=2.13.0",
     "inquirer>=3.4.0",
     "matplotlib>=3.10.1",
     "networkx>=3.4.2",

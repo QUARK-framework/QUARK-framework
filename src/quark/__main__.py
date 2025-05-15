@@ -10,6 +10,7 @@ from typing import Any
 
 from quark.argument_parsing import get_args
 from quark.benchmarking import (
+    FailedPipelineRun,
     FinishedPipelineRun,
     FinishedTreeRun,
     InterruptedTreeRun,
@@ -30,9 +31,10 @@ class BenchmarkingPickle:
     plugins: list[str]
     pipeline_trees: list[ModuleNode]
     finished_pipeline_runs: list[FinishedPipelineRun]
+    failed_pipeline_runs: list[FailedPipelineRun]
 
 
-class PipelineRunResultEncoder(json.JSONEncoder):
+class FinishedPipelineRunResultEncoder(json.JSONEncoder):
     def default(self, o: Any) -> Any:  # noqa: ANN401
         if not isinstance(o, FinishedPipelineRun):
             # Let the base class default method raise the TypeError
@@ -46,13 +48,27 @@ class PipelineRunResultEncoder(json.JSONEncoder):
         return d
 
 
+class FailedPipelineRunResultEncoder(json.JSONEncoder):
+    def default(self, o: Any) -> Any:  # noqa: ANN401
+        if not isinstance(o, FailedPipelineRun):
+            # Let the base class default method raise the TypeError
+            return super().default(o)
+        d = o.__dict__.copy()
+        d["exception"] = str(d["exception"])
+        d["metrics_up_to_now"] = [step.__dict__ for step in o.metrics_up_to_now]
+        for step in d["metrics_up_to_now"]:
+            step["module_info"] = step["module_info"].__dict__
+        return d
+
+
 def start() -> None:
     """Start the benchmarking process."""
     args = get_args()
     base_path: Path
     plugins = list[str]
     pipeline_trees: list[ModuleNode] = []
-    already_finished_pipeline_runs: list[FinishedPipelineRun] = []
+    all_finished_pipeline_runs: list[FinishedPipelineRun] = []
+    all_failed_pipeline_runs: list[FailedPipelineRun] = []
     match args.resume_dir:
         case None:  # New run
             base_path = Path("benchmark_runs").joinpath(datetime.today().strftime("%Y-%m-%d-%H-%M-%S"))  # noqa: DTZ002
@@ -87,10 +103,12 @@ def start() -> None:
                 benchmarking_pickle: BenchmarkingPickle = pickle.load(f)  # noqa: S301
             plugins = benchmarking_pickle.plugins
             pipeline_trees = benchmarking_pickle.pipeline_trees
-            already_finished_pipeline_runs = benchmarking_pickle.finished_pipeline_runs
+            all_finished_pipeline_runs = benchmarking_pickle.finished_pipeline_runs
+            all_failed_pipeline_runs = benchmarking_pickle.failed_pipeline_runs
 
     pickle_file_path = base_path.joinpath(PICKLE_FILE_NAME)
     pipelines_path = base_path.joinpath("pipelines")
+    failed_pipelines_path = base_path.joinpath("failed_pipelines")
 
     loader.load_plugins(plugins)
 
@@ -98,10 +116,12 @@ def start() -> None:
     for pipeline_tree in pipeline_trees:
         match run_pipeline_tree(pipeline_tree):
             case FinishedTreeRun(finished_pipeline_runs):
-                already_finished_pipeline_runs.extend(finished_pipeline_runs)
-            case InterruptedTreeRun(finished_pipeline_runs, rest_tree):
-                already_finished_pipeline_runs.extend(finished_pipeline_runs)
-                rest_trees.append(rest_tree)
+                all_finished_pipeline_runs.extend(finished_pipeline_runs)
+            case InterruptedTreeRun(finished_pipeline_runs, failed_pipeline_runs, rest_tree):
+                all_finished_pipeline_runs.extend(finished_pipeline_runs)
+                all_failed_pipeline_runs.extend(failed_pipeline_runs)
+                if rest_tree:
+                    rest_trees.append(rest_tree)
 
     if rest_trees:
         logging.info(
@@ -113,7 +133,8 @@ def start() -> None:
                 BenchmarkingPickle(
                     plugins=plugins,
                     pipeline_trees=rest_trees,
-                    finished_pipeline_runs=already_finished_pipeline_runs,
+                    finished_pipeline_runs=all_finished_pipeline_runs,
+                    failed_pipeline_runs=all_failed_pipeline_runs,
                 ),
                 f,  # IDE throws warning: Expected type 'SupportsWrite[bytes]', got 'BufferedWriter' instead
             )
@@ -122,17 +143,31 @@ def start() -> None:
 
     logging.info(" ======================== RESULTS =========================== ")
 
-    pipelines_path.mkdir()
-    for result in already_finished_pipeline_runs:
-        dir_name = str.join("-", (step.unique_name for step in result.steps))
+    if all_finished_pipeline_runs:
+        pipelines_path.mkdir()
+    for finished_run in all_finished_pipeline_runs:
+        dir_name = str.join("-", (step.unique_name for step in finished_run.steps))
         dir_path = pipelines_path.joinpath(dir_name)
         dir_path.mkdir()
         json_path = dir_path.joinpath("results.json")
-        json_path.write_text(json.dumps(result, cls=PipelineRunResultEncoder, indent=4))
-        logging.info([step.module_info for step in result.steps])
-        logging.info(f"Result: {result.result}")
-        logging.info(f"Total time: {sum(step.preprocess_time + step.postprocess_time for step in result.steps)}")
-        logging.info(f"Metrics: {[step.additional_metrics for step in result.steps]}")
+        json_path.write_text(json.dumps(finished_run, cls=FinishedPipelineRunResultEncoder, indent=4))
+        logging.info([step.module_info for step in finished_run.steps])
+        logging.info(f"Result: {finished_run.result}")
+        logging.info(f"Total time: {sum(step.preprocess_time + step.postprocess_time for step in finished_run.steps)}")
+        logging.info(f"Metrics: {[step.additional_metrics for step in finished_run.steps]}")
+        logging.info("-" * 60)
+
+    if all_failed_pipeline_runs:
+        failed_pipelines_path.mkdir()
+    for i, failed_run in enumerate(all_failed_pipeline_runs):
+        dir_name = str(i) + str.join("-", (step.unique_name for step in failed_run.metrics_up_to_now))
+        dir_path = failed_pipelines_path.joinpath(dir_name)
+        dir_path.mkdir()
+        json_path = dir_path.joinpath("results.json")
+        json_path.write_text(json.dumps(failed_run, cls=FailedPipelineRunResultEncoder, indent=4))
+        logging.info([step.module_info for step in failed_run.metrics_up_to_now])
+        logging.info(f"Exception: {failed_run.exception}")
+        logging.info(f"Metrics: {[step.additional_metrics for step in failed_run.metrics_up_to_now]}")
         logging.info("-" * 60)
 
     if not args.keep_pickle:

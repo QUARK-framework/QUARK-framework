@@ -23,7 +23,7 @@ def import_module(plugin_file: str) -> PluginInterface:
     # python, modules can also provide functions. The reason for this type annotation is just so the type checker does
     # not complain when register is called in line 32. It cannot enforce that the plugin is actually conforming to the
     # interface
-    return importlib.import_module(plugin_file) # pyright: ignore
+    return importlib.import_module(plugin_file)  # type: ignore
 
 
 def load_plugins(plugin_files: list[str]) -> None:

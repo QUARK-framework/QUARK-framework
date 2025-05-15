@@ -96,7 +96,7 @@ class FinishedPipelineRun:
 
 
 @dataclass(frozen=True)
-class _InProgressPipelineRun:
+class InProgressPipelineRun:
     """An in-progress pipeline run that was not interrupted or paused yet, used by run_pipeline_tree.imp()."""
 
     downstream_data: Any  # The result of a child node's postprocessing step
@@ -104,11 +104,17 @@ class _InProgressPipelineRun:
 
 
 @dataclass(frozen=True)
-class _PausedPipelineRun:
+class PausedPipelineRun:
     pass
 
 
-_PipelineRunStatus = _InProgressPipelineRun | _PausedPipelineRun
+@dataclass(frozen=True)
+class FailedPipelineRun:
+    exception: Exception
+    metrics_up_to_now: list[ModuleRunMetrics]
+
+
+PipelineRunStatus = InProgressPipelineRun | PausedPipelineRun | FailedPipelineRun
 # === Pipeline Run Progress ===
 
 
@@ -125,7 +131,8 @@ class InterruptedTreeRun:
     """Represents a tree run where one or more modules were interrupted."""
 
     finished_pipeline_runs: list[FinishedPipelineRun]  # Metrics of finished pipeline runs
-    rest_tree: ModuleNode  # The remaining pipeline tree without nodes that are already finished
+    failed_pipeline_runs: list[FailedPipelineRun]
+    rest_tree: ModuleNode | None  # The remaining pipeline tree only containing sleeping nodes, None if no module sleeps
 
 
 TreeRunResult = FinishedTreeRun | InterruptedTreeRun
@@ -153,7 +160,7 @@ class ModuleNode(NodeMixin):
     data_stored_by_preprocess_interrupt: Any | None = None
 
     interrupted_during_postprocess = False
-    data_stored_by_postprocess_interrupt: list[_InProgressPipelineRun] | None = None
+    data_stored_by_postprocess_interrupt: list[InProgressPipelineRun] | None = None
 
     def __init__(self, module_info: ModuleInfo, parent: ModuleNode | None = None) -> None:
         """Initialize a ModuleNode.
@@ -181,26 +188,38 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
         node: ModuleNode,
         upstream_data: Any,
         depth: int,
-    ) -> list[_PipelineRunStatus]:
+    ) -> list[PipelineRunStatus]:
         set_logging_depth(depth)
         logging.info(f"Running preprocess for module {node.module_info}")
 
         preprocessed_data: Any
-        if node.module is None:
+        if node.module is None:  # This is the first time this node is visited
             logging.info(f"Creating module instance for {node.module_info}")
             node.module = factory.create(node.module_info.name, node.module_info.params)
-        if node.preprocess_finished:  # After an interrupted run is resumed, some steps will already be finished
+        if node.preprocess_finished:
+            # If the preprocess is already finished but the iteration still arrives here, this means that this run is
+            # being resumed from an interrupted state. Some node further down the line interrupted the execution.
             logging.info(f"Preprocessing of module {node.module_info} already done, skipping")
             preprocessed_data = node.preprocessed_data
-        else:
+        else:  # Node is not already finished, preprocessing can begin.
             if node.interrupted_during_preprocess:
+                # This is one of the nodes that interrupted the execution in a previous run. The upstream data is
+                # replaced by the stored data.
                 upstream_data = node.data_stored_by_preprocess_interrupt
-            t1 = perf_counter()
-            match node.module.preprocess(upstream_data):
-                case Sleep(stored_data):
+
+            try:
+                t1 = perf_counter()
+                preprocessing_result = node.module.preprocess(upstream_data)  # Preprocessing step
+            except Exception as e:
+                logging.exception("")
+                return [FailedPipelineRun(exception=e, metrics_up_to_now=[])]
+            match preprocessing_result:
+                case Sleep(
+                    stored_data,
+                ):  # This module wants to interrupt the execution and store some data for later
                     node.interrupted_during_preprocess = True
                     node.data_stored_by_preprocess_interrupt = stored_data
-                    return [_PausedPipelineRun()]
+                    return [PausedPipelineRun()]
                 case Backtrack(_):
                     # TODO
                     raise NotImplementedError
@@ -213,12 +232,12 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
                     msg = "The preprocessing function must return a Result type"
                     raise TypeError(msg)
 
-        results: list[_PipelineRunStatus] = []  # Will be returned later
+        results: list[PipelineRunStatus] = []  # Accumulates the return value
 
         downstream_results = (
             (imp(child, preprocessed_data, depth + 1) for child in node.children)
             if node.children
-            else iter([[_InProgressPipelineRun(downstream_data=None, metrics_up_to_now=[])]])
+            else iter([[InProgressPipelineRun(downstream_data=None, metrics_up_to_now=[])]])
         )
         if node.data_stored_by_postprocess_interrupt is not None:
             downstream_results = chain(downstream_results, iter([node.data_stored_by_postprocess_interrupt]))
@@ -227,40 +246,45 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
             set_logging_depth(depth)
             for pipeline_run_status in downstream_result:
                 match pipeline_run_status:
-                    case _PausedPipelineRun():
-                        results.append(pipeline_run_status)
-                    case _InProgressPipelineRun(downstream_data, metrics_up_to_now):
+                    case status if isinstance(status, (PausedPipelineRun, FailedPipelineRun)):
+                        results.append(status)
+                    case InProgressPipelineRun(downstream_data, metrics_up_to_now):
                         logging.info(f"Running postprocess for module {node.module_info}")
-                        t1 = perf_counter()
-                        match node.module.postprocess(downstream_data):
-                            case Sleep(stored_data):
-                                # TODO
-                                raise NotImplementedError
-                            case Backtrack():
-                                # TODO
-                                raise NotImplementedError
-                            case Data(postprocessed_data):
-                                postprocess_time = perf_counter() - t1
-                                logging.info(
-                                    f"Postprocess for module {node.module_info} took {postprocess_time} seconds",
-                                )
-                                module_run_metrics = ModuleRunMetrics.create(
-                                    module_info=node.module_info,
-                                    module=node.module,
-                                    preprocess_time=node.preprocess_time,  # type: ignore
-                                    postprocess_time=postprocess_time,
-                                )
-                                results.append(
-                                    _InProgressPipelineRun(
-                                        downstream_data=postprocessed_data,
-                                        metrics_up_to_now=[*metrics_up_to_now, module_run_metrics],
-                                    ),
-                                )
-                            case _:
-                                msg = "The postprocessing function must return a Result type"
-                                raise TypeError(msg)
-
-                        node.parent = None  # This node and all its descendents ran successfully and can be deleted
+                        try:
+                            t1 = perf_counter()
+                            postprocessing_result = node.module.postprocess(downstream_data)  # Postprocessing step
+                        except Exception as e:
+                            logging.exception("")
+                            results.append(FailedPipelineRun(exception=e, metrics_up_to_now=metrics_up_to_now))
+                        else:
+                            match postprocessing_result:
+                                case Sleep(stored_data):
+                                    # TODO
+                                    raise NotImplementedError
+                                case Backtrack():
+                                    # TODO
+                                    raise NotImplementedError
+                                case Data(postprocessed_data):
+                                    postprocess_time = perf_counter() - t1
+                                    logging.info(
+                                        f"Postprocess for module {node.module_info} took {postprocess_time} seconds",
+                                    )
+                                    module_run_metrics = ModuleRunMetrics.create(
+                                        module_info=node.module_info,
+                                        module=node.module,
+                                        preprocess_time=node.preprocess_time,  # type: ignore
+                                        postprocess_time=postprocess_time,
+                                    )
+                                    results.append(
+                                        InProgressPipelineRun(
+                                            downstream_data=postprocessed_data,
+                                            metrics_up_to_now=[*metrics_up_to_now, module_run_metrics],
+                                        ),
+                                    )
+                                case _:
+                                    msg = "The postprocessing function must return a Result type"
+                                    raise TypeError(msg)
+                        node.parent = None  # This node and all its descendents ran or failed and can be deleted
         return results
 
     results = imp(pipeline_tree, None, 0)
@@ -268,12 +292,13 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
     finished_pipeline_runs = [
         FinishedPipelineRun(result=r.downstream_data, steps=r.metrics_up_to_now)
         for r in results
-        if isinstance(r, _InProgressPipelineRun)
+        if isinstance(r, InProgressPipelineRun)
     ]
 
-    if any(isinstance(r, _PausedPipelineRun) for r in results):
+    if any(isinstance(r, (PausedPipelineRun, FailedPipelineRun)) for r in results):
         return InterruptedTreeRun(
             finished_pipeline_runs=finished_pipeline_runs,
-            rest_tree=pipeline_tree,
+            failed_pipeline_runs=[x for x in results if isinstance(x, FailedPipelineRun)],
+            rest_tree=(pipeline_tree if any(isinstance(r, PausedPipelineRun) for r in results) else None),
         )
     return FinishedTreeRun(finished_pipeline_runs=finished_pipeline_runs)
