@@ -8,10 +8,12 @@ class Qubo:
     _q: dict
 
     def as_dict(self) -> dict:
+        """Create a dictionary where TODO: how exactly?."""
         return self._q
 
     @staticmethod
     def from_dict(q: dict) -> Qubo:
+        """Create a Qubo object from a dictionary where TODO: how exactly?."""
         v = Qubo()
         v._q = q
         return v

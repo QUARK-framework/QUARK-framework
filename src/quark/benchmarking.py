@@ -105,11 +105,13 @@ class InProgressPipelineRun:
 
 @dataclass(frozen=True)
 class PausedPipelineRun:
-    pass
+    """Represents a pipeline run that was interrupted by a Sleep call from one of its modules."""
 
 
 @dataclass(frozen=True)
 class FailedPipelineRun:
+    """Represents a pipeline that failed because of some exception in one of its modules."""
+
     exception: Exception
     metrics_up_to_now: list[ModuleRunMetrics]
 

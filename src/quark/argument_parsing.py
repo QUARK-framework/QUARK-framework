@@ -17,6 +17,7 @@ def _other_argument_parsing(argument_group: argparse._ArgumentGroup) -> None:
 
 
 def get_args() -> argparse.Namespace:
+    """Parse the command line and return a dictionary storing the given parameters."""
     parser = argparse.ArgumentParser(description="QUARK: Framework for Quantum Computing Application Benchmarking")
 
     _config_argument_parsing(

@@ -18,16 +18,29 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class Sleep:
+    """Special return value for preprocess and postprocess methods.
+
+    Can be returned by a module to signal that a waiting period is necessary. Once all other pipelines are finished,
+    interrupted, or sleeping, execution will be paused and the current program state will be stored. Quark can be
+    executed again at a later time to continue execution. Depending on whether the sleep object was returned from the
+    pre- or postprocessing method, the respective method will be called again, this time with the data stored in the
+    stored_data field of the Sleep object.
+    """
+
     stored_data: InterfaceType
 
 
 @dataclass(frozen=True)
 class Backtrack:
+    """TODO: Not implemented yet."""
+
     data: InterfaceType
 
 
 @dataclass(frozen=True)
 class Data:
+    """Standard return value for preprocess and postprocess methods."""
+
     data: InterfaceType
 
 

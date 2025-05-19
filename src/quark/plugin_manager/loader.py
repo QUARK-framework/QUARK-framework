@@ -15,10 +15,14 @@ class PluginInterface(Protocol):
 
     @staticmethod
     def register() -> None:
-        pass
+        """Plugin method that registers all its provided modules with the factory.
+
+        This method should be available at the top level of a plugin. See the documentation of factory.register for more
+        information.
+        """
 
 
-def import_module(plugin_file: str) -> PluginInterface:
+def _import_plugin(plugin_file: str) -> PluginInterface:
     # Is it really a PluginInterface that is returned here? A: Yes, a PluginInterface provides a register function. In
     # python, modules can also provide functions. The reason for this type annotation is just so the type checker does
     # not complain when register is called in line 32. It cannot enforce that the plugin is actually conforming to the
@@ -27,6 +31,7 @@ def import_module(plugin_file: str) -> PluginInterface:
 
 
 def load_plugins(plugin_files: list[str]) -> None:
+    """Import and register the plugins at the path-strings given."""
     for plugin_file in plugin_files:
-        module = import_module(plugin_file)
-        module.register()
+        plugin = _import_plugin(plugin_file)
+        plugin.register()

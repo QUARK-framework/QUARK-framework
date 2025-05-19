@@ -35,7 +35,9 @@ class BenchmarkingPickle:
 
 
 class FinishedPipelineRunResultEncoder(json.JSONEncoder):
-    def default(self, o: Any) -> Any:  # noqa: ANN401
+    """JSONEncoder for the FinishedPipelineRun class."""
+
+    def default(self, o: Any) -> Any:  # noqa: ANN401 D102
         if not isinstance(o, FinishedPipelineRun):
             # Let the base class default method raise the TypeError
             return super().default(o)
@@ -49,7 +51,9 @@ class FinishedPipelineRunResultEncoder(json.JSONEncoder):
 
 
 class FailedPipelineRunResultEncoder(json.JSONEncoder):
-    def default(self, o: Any) -> Any:  # noqa: ANN401
+    """JSONEncoder for the FailedPipelineRun class."""
+
+    def default(self, o: Any) -> Any:  # noqa: ANN401 D102
         if not isinstance(o, FailedPipelineRun):
             # Let the base class default method raise the TypeError
             return super().default(o)
