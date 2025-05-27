@@ -184,7 +184,7 @@ The second parameter is a callable that returns an instance of the respective mo
 
 ### Module Structure
 
-A valid QUARK module must implement the `preprocess` and `postprocess` functions, which are abstract functions specified in `quark.core.CORE`.
+A valid QUARK module must implement the `preprocess` and `postprocess` functions, which are abstract functions specified in `quark.core.Core`.
 
 `example_module.py`
 ```python
@@ -200,7 +200,7 @@ class ExampleModule(Core):
 
     A module must have a preprocess and postprocess method, as required by the Core abstract base class.
     A module's interface is defined by the type of data parameter those methods receive and return, dictating which other modules it can be connected to.
-    Types defining interfaces should be chosen form QUARKs predefined set of types to ensure compatibility with other modules. TODO: insert link
+    Types defining interfaces should be chosen form QUARKs predefined set of types to ensure compatibility with other modules.
     """
 
     @override

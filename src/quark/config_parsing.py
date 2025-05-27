@@ -64,11 +64,9 @@ def _init_pipeline_trees(pipeline: list[PipelineLayer]) -> list[ModuleNode]:
     # Shouldn't it be "iteratively" instead of "recursively"? A: Logically, yes, this is what is happening. But the
     # implementation works recursively
 
-    :param pipeline: TODO
-    :return: TODO
     """
 
-    # TODO rewrite to simple for loop
+    # TODO rewrite to simple for-loop
     def imp(pipeline: list[list[ModuleFormat]], parent: ModuleNode) -> None:
         match pipeline:
             case []:

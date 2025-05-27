@@ -41,9 +41,9 @@ class FinishedPipelineRunResultEncoder(json.JSONEncoder):
         if not isinstance(o, FinishedPipelineRun):
             # Let the base class default method raise the TypeError
             return super().default(o)
-        # TODO Handle error if no string representation of data is available
         d = o.__dict__.copy()
-        del d["result"]
+        if not isinstance(d["result"], float):
+            del d["result"]
         d["steps"] = [step.__dict__ for step in o.steps]
         for step in d["steps"]:
             step["module_info"] = step["module_info"].__dict__
