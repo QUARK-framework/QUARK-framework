@@ -75,7 +75,7 @@ This config file would result in a total of $2\cdot1\cdot2=4$ pipelines to be co
 ### Comparing Incompatible Modules
 Modules can only be swapped if their upstream and downstream types match.
 However, sometimes it might be necessary to compare one benchmarking pipeline with another where only some of their module share common interfaces.
-In such cases, it is possible to specify the `pipelines` value, an array of `pipeline` specifications. 
+In such cases, it is possible to specify the `pipelines` value, an array of `pipeline` specifications.
 Each `pipeline` specification can still use the layered format introduced in [Pipeline Layers](#pipeline-layers).
 
 `multiple_pipelines_config.yaml`
@@ -122,13 +122,13 @@ first_layer:
 second_layer: &second_layer "tsp_qubo_mapping_dnx"
 
 third_layer: &third_layer [
-  "simulated_annealer",
-  "quantum_annealer": {TODO api token here}
+  "simulated_annealer": {num_reads: 1},
+  "simulated_annealer": {num_reads: 1000},
 ]
 
 pipeline1: &pipeline1 [
   *first_layer,
-  *second_layer, 
+  *second_layer,
   *third_layer,
 ]
 

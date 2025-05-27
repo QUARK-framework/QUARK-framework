@@ -12,7 +12,7 @@
 \begin{tikzpicture}
   \node[pipelineModule] (TSPGraph) {TSP-Graph};
   \node[pipelineModule] (QUBOMapping) at (4.5*\radius, 0) {QUBO Mapping};
-  \node[pipelineModule] (SimulatedAnnealer) at (9*\radius, 0) {Quantum Annealer};
+  \node[pipelineModule] (SimulatedAnnealer) at (9*\radius, 0) {Annealer};
 
   \draw[->, ultra thick] ($(TSPGraph) + (40:1.5*\radius)$) to [out=40,in=140] node[above] {\textbf{\color{violet}1} preprocess} ($(QUBOMapping) + (140:1.5*\radius)$);
 
