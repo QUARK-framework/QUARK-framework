@@ -19,10 +19,6 @@ def register(plugin_type: str, creator_fn: Callable[..., Core]) -> None:
     plugin_creation_funcs[plugin_type] = creator_fn
 
 
-# def unregister(plugin_type: str) -> None:
-#     plugin_creation_funcs.pop(plugin_type, None)
-
-
 def create(module_name: str, arguments: dict[str, Any]) -> Core:
     """Create an instance of a module previously registered with the factory.
 
