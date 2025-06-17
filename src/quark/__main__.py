@@ -6,7 +6,10 @@ import pickle
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from textwrap import wrap
 from typing import Any
+
+import matplotlib.pyplot as plt
 
 from quark.argument_parsing import get_args
 from quark.benchmarking import (
@@ -18,6 +21,7 @@ from quark.benchmarking import (
     run_pipeline_tree,
 )
 from quark.config_parsing import parse_config
+from quark.interface_types import InterfaceType, Other
 from quark.plugin_manager import loader
 from quark.quark_logging import set_logger
 
@@ -34,6 +38,16 @@ class BenchmarkingPickle:
     failed_pipeline_runs: list[FailedPipelineRun]
 
 
+def extract_result(result: InterfaceType) -> float | None:
+    match result:
+        case Other(data) if isinstance(data, int):
+            return float(data)
+        case Other(data) if isinstance(data, float):
+            return data
+        case _:
+            return None
+
+
 class FinishedPipelineRunResultEncoder(json.JSONEncoder):
     """JSONEncoder for the FinishedPipelineRun class."""
 
@@ -42,8 +56,11 @@ class FinishedPipelineRunResultEncoder(json.JSONEncoder):
             # Let the base class default method raise the TypeError
             return super().default(o)
         d = o.__dict__.copy()
-        if not isinstance(d["result"], float):
-            del d["result"]
+        match extract_result(d["result"]):
+            case None:
+                del d["result"]
+            case result:
+                d["result"] = result
         d["steps"] = [step.__dict__ for step in o.steps]
         for step in d["steps"]:
             step["module_info"] = step["module_info"].__dict__
@@ -149,6 +166,7 @@ def start() -> None:
 
     if all_finished_pipeline_runs:
         pipelines_path.mkdir()
+    bar_plot_results = []
     for finished_run in all_finished_pipeline_runs:
         dir_name = str.join("-", (step.unique_name for step in finished_run.steps))
         dir_path = pipelines_path.joinpath(dir_name)
@@ -156,10 +174,13 @@ def start() -> None:
         json_path = dir_path.joinpath("results.json")
         json_path.write_text(json.dumps(finished_run, cls=FinishedPipelineRunResultEncoder, indent=4))
         logging.info([step.module_info for step in finished_run.steps])
-        logging.info(f"Result: {finished_run.result}")
+        result = extract_result(finished_run.result)
+        logging.info(f"Result: {result}")
         logging.info(f"Total time: {sum(step.preprocess_time + step.postprocess_time for step in finished_run.steps)}")
         logging.info(f"Metrics: {[step.additional_metrics for step in finished_run.steps]}")
         logging.info("-" * 60)
+        if result:
+            bar_plot_results.append(("\n".join(wrap(dir_name, 25)), result))
 
     if all_failed_pipeline_runs:
         failed_pipelines_path.mkdir()
@@ -173,6 +194,16 @@ def start() -> None:
         logging.info(f"Exception: {failed_run.exception}")
         logging.info(f"Metrics: {[step.additional_metrics for step in failed_run.metrics_up_to_now]}")
         logging.info("-" * 60)
+
+    if bar_plot_results:
+        bar_plot_results.sort(key=lambda x: x[1], reverse=True)
+        plt.barh([r[0] for r in bar_plot_results], [r[1] for r in bar_plot_results])
+        plt.title("Results")
+        plt.ylabel("Pipelines")
+        plt.yticks(fontsize=5)
+        plt.xlabel("Result")
+        plt.tight_layout()
+        plt.savefig(base_path.joinpath("results.pdf"))
 
     if not args.keep_pickle:
         pickle_file_path.unlink(missing_ok=True)
