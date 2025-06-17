@@ -14,6 +14,12 @@ def _other_argument_parsing(argument_group: argparse._ArgumentGroup) -> None:
         help="Keep the pickled state of an interrupted QUARK run, even if all pipeline runs were completed",
         action="store_true",
     )
+    argument_group.add_argument(
+        "-ff",
+        "--failfast",
+        help="Flag whether a single failed benchmark run causes QUARK to fail",
+        action="store_true",
+    )
 
 
 def get_args() -> argparse.Namespace:

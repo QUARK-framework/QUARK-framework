@@ -176,7 +176,7 @@ class ModuleNode(NodeMixin):
         self.parent = parent
 
 
-def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
+def run_pipeline_tree(pipeline_tree: ModuleNode, *, failfast: bool = False) -> TreeRunResult:
     """Run pipelines by traversing the given pipeline tree.
 
     The pipeline tree represents one or more pipelines, where each node is a module. A node provides its output to
@@ -213,6 +213,8 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
                 t1 = perf_counter()
                 preprocessing_result = node.module.preprocess(upstream_data)  # Preprocessing step
             except Exception as e:
+                if failfast:
+                    raise
                 logging.exception("")
                 return [FailedPipelineRun(exception=e, metrics_up_to_now=[])]
             match preprocessing_result:
@@ -256,6 +258,8 @@ def run_pipeline_tree(pipeline_tree: ModuleNode) -> TreeRunResult:
                             t1 = perf_counter()
                             postprocessing_result = node.module.postprocess(downstream_data)  # Postprocessing step
                         except Exception as e:
+                            if failfast:
+                                raise
                             logging.exception("")
                             results.append(FailedPipelineRun(exception=e, metrics_up_to_now=metrics_up_to_now))
                         else:

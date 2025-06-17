@@ -118,7 +118,7 @@ def start() -> None:
 
     rest_trees: list[ModuleNode] = []
     for pipeline_tree in pipeline_trees:
-        match run_pipeline_tree(pipeline_tree):
+        match run_pipeline_tree(pipeline_tree, failfast=args.failfast):
             case FinishedTreeRun(finished_pipeline_runs):
                 all_finished_pipeline_runs.extend(finished_pipeline_runs)
             case InterruptedTreeRun(finished_pipeline_runs, failed_pipeline_runs, rest_tree):
