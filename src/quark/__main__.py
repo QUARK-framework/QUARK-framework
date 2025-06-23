@@ -82,15 +82,15 @@ class FailedPipelineRunResultEncoder(json.JSONEncoder):
         return d
 
 
-def start() -> None:
+def start(args: list[str] | None = None) -> None:
     """Start the benchmarking process."""
-    args = get_args()
+    parsed_args = get_args(args)
     base_path: Path
     plugins = list[str]
     pipeline_trees: list[ModuleNode] = []
     all_finished_pipeline_runs: list[FinishedPipelineRun] = []
     all_failed_pipeline_runs: list[FailedPipelineRun] = []
-    match args.resume_dir:
+    match parsed_args.resume_dir:
         case None:  # New run
             base_path = Path("benchmark_runs").joinpath(datetime.today().strftime("%Y-%m-%d-%H-%M-%S"))  # noqa: DTZ002
             base_path.mkdir(parents=True)
@@ -108,7 +108,7 @@ def start() -> None:
             logging.info("        Licensed under the Apache License, Version 2.0        ")
             logging.info(" ============================================================ ")
             # This is guaranteed to be set, as resume_dir and config are mutually exclusive and required
-            config = parse_config(args.config)
+            config = parse_config(parsed_args.config)
             plugins = config.plugins
             pipeline_trees = config.pipeline_trees
         case resume_dir_path:  # Resumed run
@@ -135,7 +135,7 @@ def start() -> None:
 
     rest_trees: list[ModuleNode] = []
     for pipeline_tree in pipeline_trees:
-        match run_pipeline_tree(pipeline_tree, failfast=args.failfast):
+        match run_pipeline_tree(pipeline_tree, failfast=parsed_args.failfast):
             case FinishedTreeRun(finished_pipeline_runs):
                 all_finished_pipeline_runs.extend(finished_pipeline_runs)
             case InterruptedTreeRun(finished_pipeline_runs, failed_pipeline_runs, rest_tree):
@@ -204,8 +204,9 @@ def start() -> None:
         plt.xlabel("Result")
         plt.tight_layout()
         plt.savefig(base_path.joinpath("results.pdf"))
+        plt.close()
 
-    if not args.keep_pickle:
+    if not parsed_args.keep_pickle:
         pickle_file_path.unlink(missing_ok=True)
 
     logging.info(" ============================================================ ")

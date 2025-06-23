@@ -22,7 +22,7 @@ def _other_argument_parsing(argument_group: argparse._ArgumentGroup) -> None:
     )
 
 
-def get_args() -> argparse.Namespace:
+def get_args(args: list[str] | None) -> argparse.Namespace:
     """Parse the command line and return a dictionary storing the given parameters."""
     parser = argparse.ArgumentParser(description="QUARK: Framework for Quantum Computing Application Benchmarking")
 
@@ -32,4 +32,7 @@ def get_args() -> argparse.Namespace:
         ),
     )
     _other_argument_parsing(parser.add_argument_group("Other arguments"))
-    return parser.parse_args(args=None if sys.argv[1:] else ["--help"])  # Print help if no arguments are provided
+    return parser.parse_args(
+        # Print help if no arguments are provided
+        args=["--help"] if (not args) and (not sys.argv[1:]) else args,
+    )
