@@ -1,0 +1,9 @@
+plugins: [
+    "my_plugin",
+    # other plugins
+    ]
+
+pipeline: [
+    "example_module", # replace with your module name (the name given to your module in __init__.py.register())
+    # other modules
+]
