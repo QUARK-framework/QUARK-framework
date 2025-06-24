@@ -110,7 +110,7 @@ To perform such a comparison for different graph sizes, the following config fil
 
 `real_config.yaml`
 ```yaml
-plugins: ["quark_plugin_tsp", "quark_plugin_devices_dwave"]
+plugins: ["quark_plugin_tsp", "quark_plugin_dwave"]
 
 first_layer:
   &first_layer [
@@ -122,8 +122,8 @@ first_layer:
 second_layer: &second_layer "tsp_qubo_mapping_dnx"
 
 third_layer: &third_layer [
-  "simulated_annealer": {num_reads: 1},
-  "simulated_annealer": {num_reads: 1000},
+  "simulated_annealer_dwave": {num_reads: 1},
+  "simulated_annealer_dwave": {num_reads: 1000},
 ]
 
 pipeline1: &pipeline1 [
@@ -140,10 +140,10 @@ pipeline2: &pipeline2 [
 pipelines: [*pipeline1, *pipeline2]
 ```
 
-This example uses the two plugins `quark-plugin-tsp` and `quark-plugin-devices-dwave`, both available as pip packages.
+This example uses the two plugins `quark-plugin-tsp` and `quark-plugin-dwave`, both available as pip packages.
 To run this config file, install all necessary dependencies and run QUARK-framework, passing the path to this config file:
 ```properties
-pip install quark-framework quark-plugin-tsp quark-plugin-devices-dwave
+pip install quark-framework quark-plugin-tsp quark-plugin-dwave
 python -m quark -c path/to/config/file
 ```
 
