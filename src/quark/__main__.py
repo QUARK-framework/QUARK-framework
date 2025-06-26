@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import pickle
+import shutil
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -109,6 +110,7 @@ def start(args: list[str] | None = None) -> None:
             logging.info(" ============================================================ ")
             # This is guaranteed to be set, as resume_dir and config are mutually exclusive and required
             config = parse_config(parsed_args.config)
+            shutil.copyfile(parsed_args.config, base_path.joinpath("config.yml"))
             plugins = config.plugins
             pipeline_trees = config.pipeline_trees
         case resume_dir_path:  # Resumed run

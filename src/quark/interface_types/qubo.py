@@ -8,7 +8,7 @@ class Qubo:
     _q: dict
 
     def as_dict(self) -> dict:
-        """Create a dictionary where TODO: how exactly?."""
+        """Create a dictionary where TODO: how exactly?. Keys are labels for qubits, can be anything"""
         return self._q
 
     @staticmethod
