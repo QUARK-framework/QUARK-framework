@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from anytree import NodeMixin
 
-from quark.core import Backtrack, Core, Data, Sleep
+from quark.core import Backtrack, Core, Data, Failed, Sleep
 from quark.plugin_manager import factory
 from quark.quark_logging import set_logging_depth
 
@@ -110,9 +110,9 @@ class PausedPipelineRun:
 
 @dataclass(frozen=True)
 class FailedPipelineRun:
-    """Represents a pipeline that failed because of some exception in one of its modules."""
+    """Represents a failed pipeline run."""
 
-    exception: Exception
+    reason: str
     metrics_up_to_now: list[ModuleRunMetrics]
 
 
@@ -216,7 +216,7 @@ def run_pipeline_tree(pipeline_tree: ModuleNode, *, failfast: bool = False) -> T
                 if failfast:
                     raise
                 logging.exception("")
-                return [FailedPipelineRun(exception=e, metrics_up_to_now=[])]
+                return [FailedPipelineRun(reason=str(e), metrics_up_to_now=[])]
             match preprocessing_result:
                 case Sleep(
                     stored_data,
@@ -227,6 +227,10 @@ def run_pipeline_tree(pipeline_tree: ModuleNode, *, failfast: bool = False) -> T
                 case Backtrack(_):
                     # TODO
                     raise NotImplementedError
+                case Failed(reason):
+                    logging.error(reason)
+                    return [FailedPipelineRun(reason=reason, metrics_up_to_now=[])]
+
                 case Data(preprocessed_data):
                     node.preprocess_time = perf_counter() - t1
                     logging.info(f"Preprocess for module {node.module_info} took {node.preprocess_time} seconds")
@@ -261,7 +265,7 @@ def run_pipeline_tree(pipeline_tree: ModuleNode, *, failfast: bool = False) -> T
                             if failfast:
                                 raise
                             logging.exception("")
-                            results.append(FailedPipelineRun(exception=e, metrics_up_to_now=metrics_up_to_now))
+                            results.append(FailedPipelineRun(reason=str(e), metrics_up_to_now=metrics_up_to_now))
                         else:
                             match postprocessing_result:
                                 case Sleep(stored_data):
@@ -270,6 +274,11 @@ def run_pipeline_tree(pipeline_tree: ModuleNode, *, failfast: bool = False) -> T
                                 case Backtrack():
                                     # TODO
                                     raise NotImplementedError
+                                case Failed(reason):
+                                    logging.error(reason)
+                                    results.append(
+                                        FailedPipelineRun(reason=reason, metrics_up_to_now=metrics_up_to_now),
+                                    )
                                 case Data(postprocessed_data):
                                     postprocess_time = perf_counter() - t1
                                     logging.info(

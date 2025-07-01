@@ -44,7 +44,12 @@ class Data:
     data: InterfaceType
 
 
-Result = Sleep | Backtrack | Data
+@dataclass(frozen=True)
+class Failed:
+    reason: str
+
+
+Result = Sleep | Backtrack | Data | Failed
 
 
 class Core(ABC):

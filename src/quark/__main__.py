@@ -193,7 +193,7 @@ def start(args: list[str] | None = None) -> None:
         json_path = dir_path.joinpath("results.json")
         json_path.write_text(json.dumps(failed_run, cls=FailedPipelineRunResultEncoder, indent=4))
         logging.info([step.module_info for step in failed_run.metrics_up_to_now])
-        logging.info(f"Exception: {failed_run.exception}")
+        logging.info(f"Exception: {failed_run.reason}")
         logging.info(f"Metrics: {[step.additional_metrics for step in failed_run.metrics_up_to_now]}")
         logging.info("-" * 60)
 
