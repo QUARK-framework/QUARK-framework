@@ -76,7 +76,6 @@ class FailedPipelineRunResultEncoder(json.JSONEncoder):
             # Let the base class default method raise the TypeError
             return super().default(o)
         d = o.__dict__.copy()
-        d["exception"] = str(d["exception"])
         d["metrics_up_to_now"] = [step.__dict__ for step in o.metrics_up_to_now]
         for step in d["metrics_up_to_now"]:
             step["module_info"] = step["module_info"].__dict__
