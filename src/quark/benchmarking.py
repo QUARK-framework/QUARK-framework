@@ -188,7 +188,7 @@ def run_pipeline_tree(pipeline_tree: ModuleNode, *, failfast: bool = False) -> T
 
     def imp(
         node: ModuleNode,
-        upstream_data: Any,
+        upstream_data: Any, # TODO: InterfaceType,
         depth: int,
     ) -> list[PipelineRunStatus]:
         set_logging_depth(depth)
@@ -196,9 +196,11 @@ def run_pipeline_tree(pipeline_tree: ModuleNode, *, failfast: bool = False) -> T
 
         preprocessed_data: Any
         if node.module is None:  # This is the first time this node is visited
+            # Only false if resumed
             logging.info(f"Creating module instance for {node.module_info}")
             node.module = factory.create(node.module_info.name, node.module_info.params)
         if node.preprocess_finished:
+            # Can only be true if resumed
             # If the preprocess is already finished but the iteration still arrives here, this means that this run is
             # being resumed from an interrupted state. Some node further down the line interrupted the execution.
             logging.info(f"Preprocessing of module {node.module_info} already done, skipping")
@@ -208,14 +210,14 @@ def run_pipeline_tree(pipeline_tree: ModuleNode, *, failfast: bool = False) -> T
                 # This is one of the nodes that interrupted the execution in a previous run. The upstream data is
                 # replaced by the stored data.
                 upstream_data = node.data_stored_by_preprocess_interrupt
-
+                # TODO: Check if preprocessed_data can be thrown away here
             try:
                 t1 = perf_counter()
                 preprocessing_result = node.module.preprocess(upstream_data)  # Preprocessing step
             except Exception as e:
                 if failfast:
                     raise
-                logging.exception("")
+                logging.exception("") # TODO: check if "" can be replaced by e
                 return [FailedPipelineRun(reason=str(e), metrics_up_to_now=[])]
             match preprocessing_result:
                 case Sleep(
@@ -226,6 +228,8 @@ def run_pipeline_tree(pipeline_tree: ModuleNode, *, failfast: bool = False) -> T
                     return [PausedPipelineRun()]
                 case Backtrack(_):
                     # TODO
+                    # Instead of going to the downstream nodes, this module wants to backtrack to the parent node
+                    # return backtracked_pipeline_run
                     raise NotImplementedError
                 case Failed(reason):
                     logging.error(reason)
@@ -247,10 +251,16 @@ def run_pipeline_tree(pipeline_tree: ModuleNode, *, failfast: bool = False) -> T
             if node.children
             else iter([[InProgressPipelineRun(downstream_data=None, metrics_up_to_now=[])]])
         )
+        # This decides if the recursion continues or stops depending on if there are children left
         if node.data_stored_by_postprocess_interrupt is not None:
             downstream_results = chain(downstream_results, iter([node.data_stored_by_postprocess_interrupt]))
+            # Handles postprocessing sleeps
 
-        for downstream_result in downstream_results:
+        for downstream_result in downstream_results: # TODO case distinction for backtracked pipeline runs
+            # case backtracked_pipeline_run(data):
+            #     backtrack_result = module.handle_backtrack(data)
+            #     call its own handle_backtrack function (backtracked_pipeline_run.preprocessed_data)
+            # case all good (backtracking over or no backtracking needed):
             set_logging_depth(depth)
             for pipeline_run_status in downstream_result:
                 match pipeline_run_status:

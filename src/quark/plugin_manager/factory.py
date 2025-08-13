@@ -10,8 +10,8 @@ def register(plugin_type: str, creator_fn: Callable[..., Core]) -> None:
     """Register a module with the factory.
 
     To use a module in the pipeline specification of a config file, it has to be registered to the factory by the plugin
-    it is inclueded in. For each plugin given in the config file, quark's plugin loader will call the plugin's register
-    function, which is in turn required to call this register function for each of it's modules, providing a name that
+    it is included in. For each plugin given in the config file, quark's plugin loader will call the plugin's register
+    function, which is in turn required to call this register function for each of its modules, providing a name that
     identifies the module in the config file, and a creator function which will return an instance of the object when
     called. A module's creator function should be able to accept the parameters specified for this module in the config
     file.
@@ -30,5 +30,5 @@ def create(module_name: str, arguments: dict[str, Any]) -> Core:
         message = f"Unknown module: {module_name!r}"
         raise ValueError(message) from exc
 
-    # TODO is this syntax still necessary if arguments is no longer optional
+    # TODO is this syntax still necessary if arguments is no longer optional?
     return creator_func(**(arguments or {}))

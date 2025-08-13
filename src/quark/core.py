@@ -100,3 +100,8 @@ class Core(ABC):
         :return: An identifying string of the module instance. If None, a name is chosen automatically.
         """
         return None
+
+    # def handle_backtrack(self, data: Any) -> Result:
+    #     """Override this method if you want to handle backtracking from a child node."""
+    #     raise notImplementedError("One of the child nodes tried to backtrack,
+    #     but the parent module does not override handle_backtrack")
