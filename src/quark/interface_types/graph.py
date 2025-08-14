@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import networkx as nx
+
 # Check back with RUFF T0002: https://docs.astral.sh/ruff/rules/typing-only-third-party-import/
 if TYPE_CHECKING:
-    import networkx as nx
     import numpy as np
 
 

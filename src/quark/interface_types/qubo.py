@@ -55,3 +55,31 @@ class Qubo:
                 i = int(key[1:])  # Skip the 'q' prefix
                 matrix[i, i] = value
         return cls.from_matrix(matrix)
+
+    def as_dnx_qubo(self) -> dict:
+        """Return the QUBO as a dictionary suitable for D-Wave NetworkX."""
+        qubo_matrix = self._factors
+        n = int(np.sqrt(len(qubo_matrix)))
+        q = {}
+        for i in range(n * n):
+            for j in range(n * n):
+                if qubo_matrix[i, j] != 0:
+                    i_tuple = (i // n, i % n)
+                    j_tuple = (j // n, j % n)
+                    q[(i_tuple, j_tuple)] = qubo_matrix[i, j]
+        return q
+
+    @classmethod
+    def from_dnx_qubo(cls, qubo: dict, n: int) -> Qubo:
+        """Create a QUBO from a D-Wave NetworkX dictionary."""
+        qubo_matrix = np.zeros((n * n, n * n))
+        # Fill the QUBO matrix from the dictionary
+        for (i, j), value in qubo.items():
+            # Convert the tuple (i, j) to a single index in the QUBO matrix
+            qubo_matrix[i[0] * n + i[1]][j[0] * n + j[1]] = value
+        # Since the QUBO is symmetric, fill the symmetric part
+        for i in range(n * n):
+            for j in range(n * n):
+                if qubo_matrix[i, j] != 0:
+                    qubo_matrix[j, i] = qubo_matrix[i, j]
+        return cls.from_matrix(qubo_matrix)
