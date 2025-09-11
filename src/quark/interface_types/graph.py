@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import networkx as nx
+
+# Check back with RUFF T0002: https://docs.astral.sh/ruff/rules/typing-only-third-party-import/
 if TYPE_CHECKING:
-    import networkx as nx
     import numpy as np
 
 
@@ -26,8 +28,10 @@ class Graph:
     @staticmethod
     def from_adjacency_matrix(matrix: np.ndarray) -> Graph:
         """Create a Graph object from an adjacency matrix, given as a numpy.ndarray."""
-        raise NotImplementedError
+        v = Graph()
+        v._g = nx.from_numpy_array(matrix)
+        return v
 
     def as_adjacency_matrix(self) -> np.ndarray:
         """Create an adjacency matrix as a numpy.ndarray from this Graph object."""
-        raise NotImplementedError
+        return nx.to_numpy_array(self._g)

@@ -71,12 +71,12 @@ def _init_pipeline_trees(pipeline: list[PipelineLayer]) -> list[ModuleNode]:
         match pipeline:
             case []:
                 return
-            case [layer, *_]:
+            case [layer, *rest]:
                 for module in layer:
                     module_info = _init_module_info(module)
                     # TODO write about the side effect of setting the children and parent variables by AnyTree
                     node = ModuleNode(module_info, parent)
-                    imp(pipeline[1:], parent=node)
+                    imp(rest, parent=node)
 
     pipeline = [layer if isinstance(layer, list) else [layer] for layer in pipeline]  # <- pipeline is converted here
     pipeline_trees = [ModuleNode(_init_module_info(layer)) for layer in pipeline[0]]
