@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
+import math
 
 @dataclass
 class SampleDistribution:
@@ -17,9 +18,11 @@ class SampleDistribution:
         return distribution
     
     @classmethod
-    def from_statevector(cls, statevector: list[complex], n_bits: int, n_shots: int = 1.0) -> SampleDistribution:
+    def from_statevector(cls, statevector: list[complex]) -> SampleDistribution:
         """Create a SampleDistribution instance from a statevector."""
-        samples = [(bin(state_int)[2:].zfill(n_bits), abs(amplitude)**2 * n_shots) for state_int, amplitude in enumerate(statevector)]
+        n_bits = int(math.ceil(math.log2(len(statevector))))  # Number of bits needed to represent the states
+        samples = [(bin(state_int)[2:].zfill(n_bits), abs(amplitude)**2 )
+                   for state_int, amplitude in enumerate(statevector) if abs(amplitude) > 0]
         distribution = cls(samples)
         return distribution
     
