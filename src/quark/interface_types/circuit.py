@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from quark.interface_types.quantum_result import SampleDistribution, ExpectationValue
+from quark.interface_types.quantum_result import SampleDistribution
 
 
 @dataclass
