@@ -40,9 +40,8 @@ class Qubo:
         The keys should be in the format 'q0', 'q1', ...,
         or 'q0,q1', 'q0,q2', ... for single qubits and pairs of qubits, respectively.
         """
-        n_0 = max(int(key.split(",")[0][1:]) for key in qubo_dict)
-        n_1 = max(int(key.split(",")[1][1:]) for key in qubo_dict)
-        n = max(n_0, n_1) # +1 for zero-indexing
+        # Look for largest qubit index, assuming all single qubits (on the diagonal) have a value != 0 in the QUBO
+        n = max(int(key.split(",")[0][1:]) for key in qubo_dict) + 1  # +1 for zero-indexing
         matrix = np.zeros((n, n))
         for key, value in qubo_dict.items():
             if "," in key:
