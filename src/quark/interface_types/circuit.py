@@ -14,8 +14,7 @@ class Circuit:
     @classmethod
     def from_qasm_string(cls, qasm_string: str) -> Circuit:
         """Create a Circuit instance from an OpenQASM string."""
-        circuit = cls()
-        circuit._qasm_string = qasm_string
+        circuit = cls(qasm_string)
         return circuit
     
     # @property
