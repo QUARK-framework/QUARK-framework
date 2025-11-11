@@ -3,7 +3,7 @@
 """The Core abstract base class.
 
 Each module must inherit from the Core class and implement its abstract functions. Core also provides some non-abstract
-functions which contain default implementations and can be overriden by a module, if desired.
+functions which contain default implementations and can be overridden by a module, if desired.
 """
 
 from __future__ import annotations
@@ -46,6 +46,8 @@ class Data:
 
 @dataclass(frozen=True)
 class Failed:
+    """Indicates that the module has failed processing."""
+
     reason: str
 
 
